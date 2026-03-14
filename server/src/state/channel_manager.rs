@@ -30,7 +30,8 @@ impl ChannelManager {
 
         // Check max_users
         if let Some(limit) = self.limits.get(&channel_id) {
-            if members.len() >= *limit as usize {
+            let max = *limit;
+            if max > 0 && members.len() >= max as usize {
                 return Err(ChannelError::Full);
             }
         }
