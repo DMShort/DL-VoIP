@@ -104,7 +104,7 @@ pub async fn api_login(
         jti,
         issued_at,
         expires_at,
-        Some("web_admin"),
+        None,
     )
     .await;
 
