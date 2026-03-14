@@ -14,6 +14,8 @@
     Where the server binary lives (default: C:\DadLink)
 .PARAMETER ServiceName
     NSSM service name (default: DadLinkServer)
+.PARAMETER GitHubToken
+    GitHub personal access token (required for private repos). Can also be set via GITHUB_TOKEN env var.
 #>
 param(
     [Parameter(Mandatory=$true)]
@@ -21,18 +23,27 @@ param(
 
     [string]$RepoName = "Dad-Link-V2",
     [string]$InstallDir = "C:\DadLink",
-    [string]$ServiceName = "DadLinkServer"
+    [string]$ServiceName = "DadLinkServer",
+    [string]$GitHubToken = ""
 )
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "=== DadLink Server Updater ===" -ForegroundColor Cyan
 
-# 1. Get latest release info
+# 1. Resolve GitHub token
+if (-not $GitHubToken) { $GitHubToken = $env:GITHUB_TOKEN }
+$headers = @{ "User-Agent" = "DadLink-Updater" }
+if ($GitHubToken) {
+    $headers["Authorization"] = "token $GitHubToken"
+    Write-Host "Using authenticated GitHub access."
+}
+
+# 2. Get latest release info
 Write-Host "Fetching latest release..."
 $apiUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/latest"
 try {
-    $release = Invoke-RestMethod -Uri $apiUrl -Headers @{ "User-Agent" = "DadLink-Updater" }
+    $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
 } catch {
     Write-Host "ERROR: Could not fetch release info. Check repo owner/name and that releases exist." -ForegroundColor Red
     exit 1
@@ -66,7 +77,10 @@ New-Item -ItemType Directory -Path $tempDir | Out-Null
 
 $zipPath = Join-Path $tempDir $asset.name
 Write-Host "Downloading $($asset.name)..."
-Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing
+$dlHeaders = @{ "User-Agent" = "DadLink-Updater"; "Accept" = "application/octet-stream" }
+if ($GitHubToken) { $dlHeaders["Authorization"] = "token $GitHubToken" }
+$dlUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/assets/$($asset.id)"
+Invoke-WebRequest -Uri $dlUrl -Headers $dlHeaders -OutFile $zipPath -UseBasicParsing
 
 # 4. Extract
 Write-Host "Extracting..."
