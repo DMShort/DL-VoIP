@@ -8,7 +8,9 @@ server/target/
 # C++ / CMake build
 client/build/
 client/out/
+client/dist/
 client/vcpkg_installed/
+*.zip
 
 # IDE
 .vs/
