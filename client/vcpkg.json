@@ -1,0 +1,10 @@
+{
+    "name": "dadlink-client",
+    "version": "2.0.0",
+    "description": "DadLink v2 — Self-hosted encrypted PTT voice client",
+    "dependencies": [
+        "portaudio",
+        "opus",
+        "openssl"
+    ]
+}

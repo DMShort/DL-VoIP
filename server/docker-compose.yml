@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-voip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voip}
+      POSTGRES_DB: ${POSTGRES_DB:-voip}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-voip}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  voip-server:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${VOIP__SERVER__CONTROL_PORT:-9000}:9000"
+      - "${VOIP__SERVER__VOICE_PORT:-9001}:9001/udp"
+    environment:
+      - VOIP__DATABASE__URL=${VOIP__DATABASE__URL:-postgresql://voip:voip@postgres:5432/voip}
+      - VOIP__SECURITY__JWT_SECRET=${VOIP__SECURITY__JWT_SECRET:-CHANGE_ME_IN_PRODUCTION}
+      - VOIP__SECURITY__JWT_EXPIRATION_SECS=${VOIP__SECURITY__JWT_EXPIRATION_SECS:-3600}
+      - VOIP__SECURITY__KEY_ROTATION_MINS=${VOIP__SECURITY__KEY_ROTATION_MINS:-30}
+      - VOIP__BOOTSTRAP__ORG_NAME=${VOIP__BOOTSTRAP__ORG_NAME:-}
+      - VOIP__BOOTSTRAP__ORG_TAG=${VOIP__BOOTSTRAP__ORG_TAG:-}
+      - VOIP__BOOTSTRAP__ADMIN_USERNAME=${VOIP__BOOTSTRAP__ADMIN_USERNAME:-}
+      - VOIP__BOOTSTRAP__ADMIN_PASSWORD=${VOIP__BOOTSTRAP__ADMIN_PASSWORD:-}
+      - VOIP__SERVER__BIND_ADDRESS=0.0.0.0
+      - VOIP__VOICE__MAX_PACKET_RATE=${VOIP__VOICE__MAX_PACKET_RATE:-100}
+      - RUST_LOG=${RUST_LOG:-voip_server=info}
+    healthcheck:
+      test: ["/app/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  pgdata:

@@ -1,0 +1,32 @@
+server:
+  bind_address: "0.0.0.0"
+  control_port: 9000
+  voice_port: 9001
+  # tls_cert_path: "certs/server.crt"
+  # tls_key_path: "certs/server.key"
+  allowed_origins: []
+
+database:
+  url: "postgresql://voip:voip@localhost:5432/voip"
+  max_connections: 20
+
+security:
+  jwt_secret: "CHANGE_ME_IN_PRODUCTION"
+  jwt_expiration_secs: 3600
+  key_rotation_mins: 30
+
+bootstrap:
+  org_name: ""
+  org_tag: ""
+  admin_username: ""
+  admin_password: ""
+
+audit:
+  retention_days: 90
+
+voice:
+  max_packet_rate: 100
+  buffer_pool_size: 256
+
+redis:
+  url: ""

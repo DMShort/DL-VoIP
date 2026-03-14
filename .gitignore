@@ -1,0 +1,21 @@
+# Secrets
+.env
+server/.env
+
+# Rust build
+server/target/
+
+# C++ / CMake build
+client/build/
+client/out/
+client/vcpkg_installed/
+
+# IDE
+.vs/
+.vscode/
+*.user
+CMakeUserPresets.json
+
+# OS
+Thumbs.db
+.DS_Store

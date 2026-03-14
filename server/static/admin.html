@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DadLink Admin</title>
+    <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-container">
+        <div class="login-box">
+            <h1>DadLink Admin</h1>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-username">Username</label>
+                    <input type="text" id="login-username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" required autocomplete="current-password">
+                </div>
+                <div class="form-group">
+                    <label for="login-org">Org Tag</label>
+                    <input type="text" id="login-org" required>
+                </div>
+                <div id="login-error" class="error-msg" style="display:none"></div>
+                <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="admin-dashboard" style="display:none">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>DadLink</h2>
+                <span class="subtitle">Server Admin</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#" data-tab="dashboard" class="active">Dashboard</a></li>
+                <li><a href="#" data-tab="users">Users</a></li>
+                <li><a href="#" data-tab="channels">Channels</a></li>
+                <li><a href="#" data-tab="roles">Roles</a></li>
+                <li><a href="#" data-tab="audit">Audit Log</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <span id="admin-username"></span>
+                <button id="logout-btn" class="btn btn-small">Logout</button>
+            </div>
+        </nav>
+
+        <main class="content">
+            <!-- Dashboard Tab -->
+            <div id="tab-dashboard" class="tab-content active">
+                <h2>Server Dashboard</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-status">--</div>
+                        <div class="stat-label">Server Status</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-uptime">--</div>
+                        <div class="stat-label">Uptime</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-users">--</div>
+                        <div class="stat-label">Total Users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-channels">--</div>
+                        <div class="stat-label">Channels</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="tab-users" class="tab-content">
+                <div class="tab-header">
+                    <h2>Users</h2>
+                    <button class="btn btn-primary" onclick="showCreateUser()">+ New User</button>
+                </div>
+                <table class="data-table" id="users-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Display Name</th>
+                            <th>Admin</th>
+                            <th>Active</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- Channels Tab -->
+            <div id="tab-channels" class="tab-content">
+                <div class="tab-header">
+                    <h2>Channels</h2>
+                    <button class="btn btn-primary" onclick="showCreateChannel()">+ New Channel</button>
+                </div>
+                <table class="data-table" id="channels-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Max Users</th>
+                            <th>Position</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- Roles Tab -->
+            <div id="tab-roles" class="tab-content">
+                <div class="tab-header">
+                    <h2>Roles</h2>
+                    <button class="btn btn-primary" onclick="showCreateRole()">+ New Role</button>
+                </div>
+                <table class="data-table" id="roles-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Color</th>
+                            <th>Priority</th>
+                            <th>Permissions</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <!-- Audit Tab -->
+            <div id="tab-audit" class="tab-content">
+                <h2>Audit Log</h2>
+                <table class="data-table" id="audit-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Action</th>
+                            <th>Resource</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal-overlay" class="modal-overlay" style="display:none">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Modal</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer" id="modal-footer"></div>
+        </div>
+    </div>
+
+    <script src="/static/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: voip
+      POSTGRES_USER: voip
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voip"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  voip-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      VOIP__DATABASE__URL: postgresql://voip:${POSTGRES_PASSWORD}@postgres:5432/voip
+      VOIP__DATABASE__MAX_CONNECTIONS: 20
+      VOIP__SERVER__BIND_ADDRESS: 0.0.0.0
+      VOIP__SERVER__CONTROL_PORT: 9000
+      VOIP__SERVER__VOICE_PORT: 9001
+      VOIP__SECURITY__JWT_SECRET: ${JWT_SECRET}
+      VOIP__BOOTSTRAP__ORG_NAME: ${BOOTSTRAP_ORG_NAME:-}
+      VOIP__BOOTSTRAP__ORG_TAG: ${BOOTSTRAP_ORG_TAG:-}
+      VOIP__BOOTSTRAP__ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      VOIP__BOOTSTRAP__ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      RUST_LOG: voip_server=info
+    ports:
+      - "9000:9000"
+      - "9001:9001/udp"
+    healthcheck:
+      test: ["CMD", "/app/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:

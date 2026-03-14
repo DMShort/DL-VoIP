@@ -1,0 +1,36 @@
+pub mod channels;
+pub mod middleware;
+pub mod roles;
+pub mod sessions;
+pub mod users;
+
+use axum::{routing::{delete, get, post, put}, Router};
+
+use super::AppState;
+
+pub fn admin_routes() -> Router<AppState> {
+    Router::new()
+        // Users
+        .route("/admin/users", get(users::list_users))
+        .route("/admin/users", post(users::create_user))
+        .route("/admin/users/:user_id", get(users::get_user))
+        .route("/admin/users/:user_id", put(users::update_user))
+        .route("/admin/users/:user_id", delete(users::delete_user))
+        .route("/admin/users/:user_id/sessions", delete(sessions::revoke_user_sessions))
+        // Channels
+        .route("/admin/channels", get(channels::list_channels))
+        .route("/admin/channels", post(channels::create_channel))
+        .route("/admin/channels/:channel_id", put(channels::update_channel))
+        .route("/admin/channels/:channel_id", delete(channels::delete_channel))
+        // Roles
+        .route("/admin/roles", get(roles::list_roles))
+        .route("/admin/roles", post(roles::create_role))
+        .route("/admin/roles/:role_id", put(roles::update_role))
+        .route("/admin/roles/:role_id", delete(roles::delete_role))
+        .route("/admin/roles/:role_id/assign/:user_id", post(roles::assign_role))
+        .route("/admin/roles/:role_id/assign/:user_id", delete(roles::remove_role))
+        // Sessions
+        .route("/admin/sessions/:session_id", delete(sessions::revoke_session))
+        // Audit
+        .route("/admin/audit", get(sessions::get_audit_log))
+}
