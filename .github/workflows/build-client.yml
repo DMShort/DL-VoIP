@@ -63,8 +63,19 @@ jobs:
 
       - name: Deploy Qt DLLs
         working-directory: client
+        shell: pwsh
         run: |
-          & "$env:Qt6_DIR/../../../bin/windeployqt.exe" build/Release/dadlink-client.exe
+          $windeployqt = Get-ChildItem "$env:IQTA_TOOLS/../" -Recurse -Filter "windeployqt.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $windeployqt) {
+            $windeployqt = Get-Command windeployqt.exe -ErrorAction SilentlyContinue
+          }
+          if (-not $windeployqt) {
+            # Fallback: search Qt install dir
+            $qtRoot = Split-Path (Split-Path (Split-Path $env:Qt6_DIR))
+            $windeployqt = Get-ChildItem $qtRoot -Recurse -Filter "windeployqt.exe" | Select-Object -First 1
+          }
+          Write-Host "Using windeployqt: $($windeployqt.FullName)"
+          & $windeployqt.FullName build/Release/dadlink-client.exe
 
       - name: Add MSVC runtime
         working-directory: client
