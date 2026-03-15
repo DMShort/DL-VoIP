@@ -1,11 +1,11 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Downloads the latest DadLink server release from GitHub and restarts the service.
+    Downloads the latest DadLink server and client releases from GitHub.
 .DESCRIPTION
-    - Fetches the latest release from your GitHub repo
-    - Downloads and extracts the server binary
-    - Stops the NSSM service, replaces the binary, restarts it
+    - Fetches the latest server release, updates the binary, restarts the service
+    - Fetches the latest client release, places the zip in the downloads/ folder
+    - Updates client_version in server.yaml so connected clients are notified
 .PARAMETER RepoOwner
     GitHub username or org (e.g. "yourusername")
 .PARAMETER RepoName
@@ -21,7 +21,7 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$RepoOwner,
 
-    [string]$RepoName = "Dad-Link-V2",
+    [string]$RepoName = "DL-VoIP",
     [string]$InstallDir = "C:\DadLink",
     [string]$ServiceName = "DadLinkServer",
     [string]$GitHubToken = ""
@@ -29,7 +29,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== DadLink Server Updater ===" -ForegroundColor Cyan
+Write-Host "=== DadLink Updater ===" -ForegroundColor Cyan
 
 # 1. Resolve GitHub token
 if (-not $GitHubToken) { $GitHubToken = $env:GITHUB_TOKEN }
@@ -39,102 +39,182 @@ if ($GitHubToken) {
     Write-Host "Using authenticated GitHub access."
 }
 
-# 2. Get latest release info
-Write-Host "Fetching latest release..."
-$apiUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/latest"
-try {
-    $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
-} catch {
-    Write-Host "ERROR: Could not fetch release info. Check repo owner/name and that releases exist." -ForegroundColor Red
-    exit 1
-}
-
-$tag = $release.tag_name
-$asset = $release.assets | Where-Object { $_.name -like "voip-server-v*.zip" } | Select-Object -First 1
-# Fallback to old naming convention
-if (-not $asset) {
-    $asset = $release.assets | Where-Object { $_.name -like "voip-server-*.zip" } | Select-Object -First 1
-}
-
-if (-not $asset) {
-    Write-Host "ERROR: No server zip found in release $tag" -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "Latest release: $tag"
-Write-Host "Asset: $($asset.name)"
-
-# 2. Check if already up to date
-$versionFile = Join-Path $InstallDir "version.txt"
-if (Test-Path $versionFile) {
-    $currentVersion = Get-Content $versionFile -Raw
-    if ($currentVersion.Trim() -eq $tag) {
-        Write-Host "Already up to date ($tag). Nothing to do." -ForegroundColor Green
-        exit 0
-    }
-}
-
-# 3. Download
-$tempDir = Join-Path $env:TEMP "dadlink-update"
-if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
-New-Item -ItemType Directory -Path $tempDir | Out-Null
-
-$zipPath = Join-Path $tempDir $asset.name
-Write-Host "Downloading $($asset.name)..."
 $dlHeaders = @{ "User-Agent" = "DadLink-Updater"; "Accept" = "application/octet-stream" }
 if ($GitHubToken) { $dlHeaders["Authorization"] = "token $GitHubToken" }
-$dlUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/assets/$($asset.id)"
-Invoke-WebRequest -Uri $dlUrl -Headers $dlHeaders -OutFile $zipPath -UseBasicParsing
 
-# 4. Extract
-Write-Host "Extracting..."
-Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
-
-# 5. Stop service
-$serviceExists = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($serviceExists -and $serviceExists.Status -eq "Running") {
-    Write-Host "Stopping $ServiceName service..."
-    Stop-Service -Name $ServiceName -Force
-    Start-Sleep -Seconds 2
+# Helper: download a GitHub release asset
+function Save-Asset($asset, $outPath) {
+    $dlUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/assets/$($asset.id)"
+    Invoke-WebRequest -Uri $dlUrl -Headers $dlHeaders -OutFile $outPath -UseBasicParsing
 }
 
-# 6. Replace binary
-Write-Host "Updating binary..."
-if (-not (Test-Path $InstallDir)) {
-    New-Item -ItemType Directory -Path $InstallDir | Out-Null
+# ============================================================
+# SERVER UPDATE
+# ============================================================
+Write-Host ""
+Write-Host "--- Server Update ---" -ForegroundColor Yellow
+
+# Get all releases, find latest server release (tag starts with "v")
+$releasesUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases?per_page=20"
+try {
+    $releases = Invoke-RestMethod -Uri $releasesUrl -Headers $headers
+} catch {
+    Write-Host "ERROR: Could not fetch releases. Check repo owner/name." -ForegroundColor Red
+    exit 1
 }
 
-Copy-Item (Join-Path $tempDir "voip-server.exe") $InstallDir -Force
+$serverRelease = $releases | Where-Object { $_.tag_name -like "v*" -and $_.tag_name -notlike "client-*" } | Select-Object -First 1
+$serverUpdated = $false
 
-# Copy config only if it doesn't exist yet (don't overwrite user config)
-$configDest = Join-Path $InstallDir "server.yaml"
-if (-not (Test-Path $configDest)) {
-    $configSrc = Join-Path $tempDir "server.yaml"
-    if (Test-Path $configSrc) {
-        Copy-Item $configSrc $InstallDir
-        Write-Host "Default config copied. Edit $configDest before starting." -ForegroundColor Yellow
-    }
-}
+if ($serverRelease) {
+    $serverTag = $serverRelease.tag_name
+    $serverAsset = $serverRelease.assets | Where-Object { $_.name -like "voip-server-*.zip" } | Select-Object -First 1
 
-# 7. Save version
-$tag | Out-File $versionFile -Encoding utf8 -NoNewline
-
-# 8. Start service
-if ($serviceExists) {
-    Write-Host "Starting $ServiceName service..."
-    Start-Service -Name $ServiceName
-    Start-Sleep -Seconds 1
-    $svc = Get-Service -Name $ServiceName
-    if ($svc.Status -eq "Running") {
-        Write-Host "Service is running." -ForegroundColor Green
+    if (-not $serverAsset) {
+        Write-Host "No server zip in release $serverTag" -ForegroundColor Gray
     } else {
-        Write-Host "WARNING: Service status is $($svc.Status)" -ForegroundColor Yellow
+        # Check if already up to date
+        $versionFile = Join-Path $InstallDir "version.txt"
+        $currentVersion = ""
+        if (Test-Path $versionFile) { $currentVersion = (Get-Content $versionFile -Raw).Trim() }
+
+        if ($currentVersion -eq $serverTag) {
+            Write-Host "Server already up to date ($serverTag)." -ForegroundColor Green
+        } else {
+            Write-Host "Updating server: $currentVersion -> $serverTag"
+            Write-Host "Downloading $($serverAsset.name)..."
+
+            $tempDir = Join-Path $env:TEMP "dadlink-server-update"
+            if (Test-Path $tempDir) { Remove-Item $tempDir -Recurse -Force }
+            New-Item -ItemType Directory -Path $tempDir | Out-Null
+
+            $zipPath = Join-Path $tempDir $serverAsset.name
+            Save-Asset $serverAsset $zipPath
+
+            Write-Host "Extracting..."
+            Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
+
+            # Stop service
+            $serviceExists = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            if ($serviceExists -and $serviceExists.Status -eq "Running") {
+                Write-Host "Stopping $ServiceName service..."
+                Stop-Service -Name $ServiceName -Force
+                Start-Sleep -Seconds 2
+            }
+
+            # Replace binary
+            if (-not (Test-Path $InstallDir)) {
+                New-Item -ItemType Directory -Path $InstallDir | Out-Null
+            }
+            Copy-Item (Join-Path $tempDir "voip-server.exe") $InstallDir -Force
+
+            # Copy config only if it doesn't exist yet
+            $configDir = Join-Path $InstallDir "config"
+            if (-not (Test-Path (Join-Path $configDir "server.yaml"))) {
+                $configSrc = Join-Path $tempDir "server.yaml"
+                if (Test-Path $configSrc) {
+                    if (-not (Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir | Out-Null }
+                    Copy-Item $configSrc $configDir
+                    Write-Host "Default config copied." -ForegroundColor Yellow
+                }
+            }
+
+            # Save version
+            $serverTag | Out-File $versionFile -Encoding utf8 -NoNewline
+
+            # Start service
+            if ($serviceExists) {
+                Write-Host "Starting $ServiceName service..."
+                Start-Service -Name $ServiceName
+                Start-Sleep -Seconds 1
+                $svc = Get-Service -Name $ServiceName
+                if ($svc.Status -eq "Running") {
+                    Write-Host "Server updated and running ($serverTag)." -ForegroundColor Green
+                } else {
+                    Write-Host "WARNING: Service status is $($svc.Status)" -ForegroundColor Yellow
+                }
+            }
+
+            Remove-Item $tempDir -Recurse -Force
+            $serverUpdated = $true
+        }
     }
 } else {
-    Write-Host "Service '$ServiceName' not found. Start the server manually or install it with NSSM:" -ForegroundColor Yellow
-    Write-Host "  nssm install $ServiceName $InstallDir\voip-server.exe" -ForegroundColor Gray
+    Write-Host "No server releases found." -ForegroundColor Gray
 }
 
-# 9. Cleanup
-Remove-Item $tempDir -Recurse -Force
-Write-Host "Update complete: $tag" -ForegroundColor Green
+# ============================================================
+# CLIENT UPDATE
+# ============================================================
+Write-Host ""
+Write-Host "--- Client Update ---" -ForegroundColor Yellow
+
+$clientRelease = $releases | Where-Object { $_.tag_name -like "client-v*" } | Select-Object -First 1
+
+if ($clientRelease) {
+    $clientTag = $clientRelease.tag_name
+    $clientAsset = $clientRelease.assets | Where-Object { $_.name -like "DadLink-*.zip" } | Select-Object -First 1
+
+    if (-not $clientAsset) {
+        Write-Host "No client zip in release $clientTag" -ForegroundColor Gray
+    } else {
+        # Check if already up to date
+        $clientVersionFile = Join-Path $InstallDir "client-version.txt"
+        $currentClientVersion = ""
+        if (Test-Path $clientVersionFile) { $currentClientVersion = (Get-Content $clientVersionFile -Raw).Trim() }
+
+        if ($currentClientVersion -eq $clientTag) {
+            Write-Host "Client already up to date ($clientTag)." -ForegroundColor Green
+        } else {
+            Write-Host "Updating client: $currentClientVersion -> $clientTag"
+
+            # Ensure downloads directory exists
+            $downloadDir = Join-Path $InstallDir "downloads"
+            if (-not (Test-Path $downloadDir)) {
+                New-Item -ItemType Directory -Path $downloadDir | Out-Null
+            }
+
+            # Remove old client zips
+            Get-ChildItem $downloadDir -Filter "DadLink-*.zip" | Remove-Item -Force
+
+            # Download new client zip directly to downloads folder
+            $clientZipPath = Join-Path $downloadDir $clientAsset.name
+            Write-Host "Downloading $($clientAsset.name)..."
+            Save-Asset $clientAsset $clientZipPath
+
+            # Extract version from tag (client-v2.0.1-abc1234 -> 2.0.1)
+            $clientVersion = $clientTag -replace '^client-v', '' -replace '-[a-f0-9]+$', ''
+
+            # Update client_version in server.yaml
+            $configPath = Join-Path $InstallDir "config\server.yaml"
+            if (Test-Path $configPath) {
+                $yaml = Get-Content $configPath -Raw
+                if ($yaml -match 'client_version:\s*"[^"]*"') {
+                    $yaml = $yaml -replace 'client_version:\s*"[^"]*"', "client_version: `"$clientVersion`""
+                } elseif ($yaml -match 'client_version:') {
+                    $yaml = $yaml -replace 'client_version:.*', "client_version: `"$clientVersion`""
+                }
+                Set-Content $configPath $yaml -NoNewline
+                Write-Host "Updated client_version in server.yaml to $clientVersion"
+
+                # Restart server to pick up new config (if not already restarted)
+                if (-not $serverUpdated) {
+                    $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+                    if ($svc -and $svc.Status -eq "Running") {
+                        Write-Host "Restarting $ServiceName to apply new client version..."
+                        Restart-Service -Name $ServiceName
+                    }
+                }
+            }
+
+            # Save client version
+            $clientTag | Out-File $clientVersionFile -Encoding utf8 -NoNewline
+            Write-Host "Client updated ($clientTag). Zip available at: $clientZipPath" -ForegroundColor Green
+        }
+    }
+} else {
+    Write-Host "No client releases found." -ForegroundColor Gray
+}
+
+Write-Host ""
+Write-Host "=== Update check complete ===" -ForegroundColor Cyan
