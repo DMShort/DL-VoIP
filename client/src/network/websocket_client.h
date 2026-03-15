@@ -92,7 +92,7 @@ signals:
     void sslErrorOccurred(const QList<QSslError>& errors);
 
     // Update notification
-    void updateAvailable(const QString& latestVersion, const QString& currentVersion);
+    void updateAvailable(const QString& latestVersion, const QString& currentVersion, const QString& downloadUrl);
 
     // Connection issues
     void reconnecting(int attempt);

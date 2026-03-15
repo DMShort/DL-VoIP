@@ -286,10 +286,12 @@ void MainWindow::connectSignals() {
     connect(m_wsClient, &WebSocketClient::reconnecting, this, &MainWindow::onReconnecting);
     connect(m_wsClient, &WebSocketClient::reconnectFailed, this, &MainWindow::onReconnectFailed);
     connect(m_wsClient, &WebSocketClient::stateChanged, this, &MainWindow::onStateChanged);
-    connect(m_wsClient, &WebSocketClient::updateAvailable, this, [this](const QString& latest, const QString& current) {
-        m_activityLog->addEntry(
-            QString("Update available! You have v%1, latest is v%2. Please download the new client.").arg(current, latest),
-            QColor(255, 165, 0));
+    connect(m_wsClient, &WebSocketClient::updateAvailable, this, [this](const QString& latest, const QString& current, const QString& url) {
+        QString msg = QString("Update available! You have v%1, latest is v%2.").arg(current, latest);
+        if (!url.isEmpty()) {
+            msg += QString(" Download: %1").arg(url);
+        }
+        m_activityLog->addEntry(msg, QColor(255, 165, 0));
         setWindowTitle(QString("DadLink v%1 (update available: v%2)").arg(current, latest));
     });
 

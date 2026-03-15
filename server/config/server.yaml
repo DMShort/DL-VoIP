@@ -6,6 +6,7 @@ server:
   # tls_key_path: "certs/server.key"
   allowed_origins: []
   client_version: "2.0.1"
+  client_download_url: "https://github.com/DMShort/DL-VoIP/releases"
 
 database:
   url: "postgresql://voip:voip@localhost:5432/voip"

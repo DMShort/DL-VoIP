@@ -205,7 +205,8 @@ void WebSocketClient::dispatchMessage(const QString& type, const QJsonObject& pa
         if (!latestVersion.isEmpty()) {
             QString currentVersion = QStringLiteral(DADLINK_VERSION);
             if (latestVersion != currentVersion) {
-                emit updateAvailable(latestVersion, currentVersion);
+                QString downloadUrl = payload["client_download_url"].toString();
+                emit updateAvailable(latestVersion, currentVersion, downloadUrl);
             }
         }
     }

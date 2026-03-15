@@ -1,0 +1,110 @@
+name: Build Client
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'client/**'
+      - '.github/workflows/build-client.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          modules: 'qtwebsockets'
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+          vcpkgGitCommitId: '01f602195983451bc83e72f4214af2cbc495aa94'
+
+      - name: Install vcpkg dependencies
+        working-directory: client
+        run: |
+          $env:VCPKG_ROOT = "${{ github.workspace }}/vcpkg"
+          & "$env:VCPKG_ROOT/vcpkg.exe" install --triplet x64-windows-static-md
+
+      - name: Configure CMake
+        working-directory: client
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+
+      - name: Build
+        working-directory: client
+        run: cmake --build build --config Release
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          version=$(grep 'project(dadlink-client VERSION' client/CMakeLists.txt | sed 's/.*VERSION \([0-9.]*\).*/\1/')
+          short=$(git rev-parse --short HEAD)
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "short=$short" >> $GITHUB_OUTPUT
+          echo "tag=client-v${version}-${short}" >> $GITHUB_OUTPUT
+
+      - name: Deploy Qt DLLs
+        working-directory: client
+        run: |
+          & "$env:Qt6_DIR/../../../bin/windeployqt.exe" build/Release/dadlink-client.exe
+
+      - name: Add MSVC runtime
+        working-directory: client
+        shell: pwsh
+        run: |
+          # Find and copy MSVC runtime DLLs if not already present
+          $vcRedist = Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -Recurse -Filter "vcruntime140.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($vcRedist) {
+            $dir = $vcRedist.DirectoryName
+            Copy-Item "$dir\vcruntime140.dll" build/Release/ -ErrorAction SilentlyContinue
+            Copy-Item "$dir\vcruntime140_1.dll" build/Release/ -ErrorAction SilentlyContinue
+            Copy-Item "$dir\msvcp140.dll" build/Release/ -ErrorAction SilentlyContinue
+            Copy-Item "$dir\msvcp140_1.dll" build/Release/ -ErrorAction SilentlyContinue
+            Copy-Item "$dir\msvcp140_2.dll" build/Release/ -ErrorAction SilentlyContinue
+          }
+
+      - name: Create release archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path client/build/Release/* -DestinationPath DadLink-v${{ steps.version.outputs.version }}-win64.zip
+
+      - name: Generate changelog
+        shell: bash
+        run: |
+          prev_tag=$(git tag --sort=-creatordate --list 'client-v*' | head -1 2>/dev/null || echo "")
+          {
+            echo "## DadLink Client v${{ steps.version.outputs.version }}"
+            echo ""
+            echo "### Changes"
+            if [ -n "$prev_tag" ]; then
+              git log --pretty=format:"- %s (%h)" "$prev_tag"..HEAD -- client/
+            else
+              git log --pretty=format:"- %s (%h)" -20 -- client/
+            fi
+            echo ""
+          } > client-release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: DadLink Client ${{ steps.version.outputs.tag }}
+          body_path: client-release-notes.md
+          files: DadLink-*.zip

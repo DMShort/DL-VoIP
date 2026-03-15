@@ -328,6 +328,7 @@ async fn handle_authenticate(
                 channels: channel_infos,
                 users: online_users,
                 client_version: state.config.server.client_version.clone(),
+                client_download_url: state.config.server.client_download_url.clone(),
             }).to_json());
 
             // Send key exchange init

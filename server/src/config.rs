@@ -35,6 +35,9 @@ pub struct ServerConfig {
     /// Latest client version — clients are notified if they're outdated
     #[serde(default)]
     pub client_version: Option<String>,
+    /// Download URL for client updates
+    #[serde(default)]
+    pub client_download_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -127,6 +130,7 @@ impl Default for ServerConfig {
             tls_key_path: None,
             allowed_origins: Vec::new(),
             client_version: None,
+            client_download_url: None,
         }
     }
 }

@@ -61,6 +61,8 @@ pub struct AuthSuccessPayload {
     pub users: Vec<UserInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_download_url: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
