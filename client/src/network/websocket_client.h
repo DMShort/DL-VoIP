@@ -56,6 +56,10 @@ public:
     /// Whether the connection is using TLS.
     bool isTls() const { return m_useTls; }
 
+    /// Set a pinned certificate fingerprint (hex SHA-256). When set, self-signed certs
+    /// matching this fingerprint are accepted without verification.
+    void setPinnedCertFingerprint(const QString& fingerprint) { m_pinnedFingerprint = fingerprint; }
+
 signals:
     // Connection lifecycle
     void connected();
@@ -114,6 +118,7 @@ private:
     QString m_host;
     int m_port = 9000;
     bool m_useTls = true;
+    QString m_pinnedFingerprint;
 
     // Pending auth credentials (for reconnection)
     QString m_pendingMethod;

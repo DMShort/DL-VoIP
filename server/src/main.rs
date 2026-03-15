@@ -129,10 +129,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Start HTTP server
     let bind_addr = format!("{}:{}", config.server.bind_address, config.server.control_port);
+
     let listener = TcpListener::bind(&bind_addr).await?;
     info!("Server listening on {}", bind_addr);
 
-    // Serve with graceful shutdown
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),

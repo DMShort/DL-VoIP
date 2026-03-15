@@ -158,6 +158,10 @@ void LoginDialog::onConnectClicked() {
 
     saveConfigFromForm();
 
+    // Load pinned cert fingerprint if available
+    QString pinned = m_config.server.tlsPinnedCerts.value(m_config.server.address);
+    m_wsClient->setPinnedCertFingerprint(pinned);
+
     m_wsClient->connectToServer(
         m_config.server.address,
         m_config.server.port,

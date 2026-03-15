@@ -41,7 +41,12 @@ void WebSocketClient::connectToServer(const QString& host, int port, bool useTls
 
     if (useTls) {
         QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
-        sslConfig.setPeerVerifyMode(QSslSocket::VerifyPeer);
+        if (m_pinnedFingerprint.isEmpty()) {
+            sslConfig.setPeerVerifyMode(QSslSocket::VerifyPeer);
+        } else {
+            // Accept self-signed certs when we have a pinned fingerprint
+            sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
+        }
         m_socket.setSslConfiguration(sslConfig);
     }
 
