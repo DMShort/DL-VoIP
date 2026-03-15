@@ -12,6 +12,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -30,10 +32,31 @@ jobs:
         working-directory: server
         run: cargo build --release
 
-      - name: Get short SHA
-        id: sha
+      - name: Get version from Cargo.toml
+        id: version
         shell: bash
-        run: echo "short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: |
+          version=$(grep '^version' server/Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          short=$(git rev-parse --short HEAD)
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "short=$short" >> $GITHUB_OUTPUT
+          echo "tag=v${version}-${short}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        shell: bash
+        run: |
+          prev_tag=$(git tag --sort=-creatordate | head -1 2>/dev/null || echo "")
+          {
+            echo "## DadLink Voice Server v$(grep '^version' server/Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')"
+            echo ""
+            echo "### Changes since last release"
+            if [ -n "$prev_tag" ]; then
+              git log --pretty=format:"- %s (%h)" "$prev_tag"..HEAD
+            else
+              git log --pretty=format:"- %s (%h)" -20
+            fi
+            echo ""
+          } > release-notes.md
 
       - name: Create release archive
         shell: pwsh
@@ -42,12 +65,12 @@ jobs:
           Copy-Item server/target/release/voip-server.exe release/
           Copy-Item server/config/server.yaml release/
           Copy-Item server/.env.example release/
-          Compress-Archive -Path release/* -DestinationPath voip-server-${{ steps.sha.outputs.short }}.zip
+          Compress-Archive -Path release/* -DestinationPath voip-server-${{ steps.version.outputs.tag }}.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ steps.sha.outputs.short }}
-          name: Build ${{ steps.sha.outputs.short }}
-          body: "Automated build from commit ${{ github.sha }}"
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: DadLink Server ${{ steps.version.outputs.tag }}
+          body_path: release-notes.md
           files: voip-server-*.zip

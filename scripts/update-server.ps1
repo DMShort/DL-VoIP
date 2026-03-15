@@ -50,7 +50,11 @@ try {
 }
 
 $tag = $release.tag_name
-$asset = $release.assets | Where-Object { $_.name -like "voip-server-*.zip" } | Select-Object -First 1
+$asset = $release.assets | Where-Object { $_.name -like "voip-server-v*.zip" } | Select-Object -First 1
+# Fallback to old naming convention
+if (-not $asset) {
+    $asset = $release.assets | Where-Object { $_.name -like "voip-server-*.zip" } | Select-Object -First 1
+}
 
 if (-not $asset) {
     Write-Host "ERROR: No server zip found in release $tag" -ForegroundColor Red
