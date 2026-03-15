@@ -6,6 +6,7 @@ on:
     paths:
       - 'client/**'
       - '.github/workflows/build-client.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
