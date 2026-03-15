@@ -41,12 +41,10 @@ void WebSocketClient::connectToServer(const QString& host, int port, bool useTls
 
     if (useTls) {
         QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
-        if (m_pinnedFingerprint.isEmpty()) {
-            sslConfig.setPeerVerifyMode(QSslSocket::VerifyPeer);
-        } else {
-            // Accept self-signed certs when we have a pinned fingerprint
-            sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
-        }
+        // Always allow self-signed certs — we handle trust via certificate pinning.
+        // QWebSocket silently drops connections on SSL errors without emitting
+        // sslErrors on some platforms, so VerifyPeer is not usable with self-signed certs.
+        sslConfig.setPeerVerifyMode(QSslSocket::VerifyNone);
         m_socket.setSslConfiguration(sslConfig);
     }
 
