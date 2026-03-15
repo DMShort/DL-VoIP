@@ -59,6 +59,8 @@ pub struct AuthSuccessPayload {
     pub voice_port: u16,
     pub channels: Vec<ChannelInfo>,
     pub users: Vec<UserInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_version: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

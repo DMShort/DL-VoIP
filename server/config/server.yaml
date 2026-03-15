@@ -5,6 +5,7 @@ server:
   # tls_cert_path: "certs/server.crt"
   # tls_key_path: "certs/server.key"
   allowed_origins: []
+  client_version: "2.0.1"
 
 database:
   url: "postgresql://voip:voip@localhost:5432/voip"

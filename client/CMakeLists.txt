@@ -77,6 +77,11 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+# Pass version to C++ code
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    DADLINK_VERSION="${PROJECT_VERSION}"
+)
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Widgets

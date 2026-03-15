@@ -91,6 +91,9 @@ signals:
     void errorReceived(const QString& code, const QString& message);
     void sslErrorOccurred(const QList<QSslError>& errors);
 
+    // Update notification
+    void updateAvailable(const QString& latestVersion, const QString& currentVersion);
+
     // Connection issues
     void reconnecting(int attempt);
     void reconnectFailed();

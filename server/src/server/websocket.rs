@@ -327,6 +327,7 @@ async fn handle_authenticate(
                 voice_port: state.config.server.voice_port,
                 channels: channel_infos,
                 users: online_users,
+                client_version: state.config.server.client_version.clone(),
             }).to_json());
 
             // Send key exchange init

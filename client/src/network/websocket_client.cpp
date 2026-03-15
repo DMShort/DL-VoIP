@@ -199,6 +199,15 @@ void WebSocketClient::dispatchMessage(const QString& type, const QJsonObject& pa
 
         setState(State::Connected);
         emit authSuccess(userId, token, voicePort, channels, users);
+
+        // Check for client update
+        QString latestVersion = payload["client_version"].toString();
+        if (!latestVersion.isEmpty()) {
+            QString currentVersion = QStringLiteral(DADLINK_VERSION);
+            if (latestVersion != currentVersion) {
+                emit updateAvailable(latestVersion, currentVersion);
+            }
+        }
     }
     else if (type == "auth_failed") {
         QString reason = payload["reason"].toString();

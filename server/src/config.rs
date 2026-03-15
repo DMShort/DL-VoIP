@@ -32,6 +32,9 @@ pub struct ServerConfig {
     pub tls_key_path: Option<String>,
     #[serde(default)]
     pub allowed_origins: Vec<String>,
+    /// Latest client version — clients are notified if they're outdated
+    #[serde(default)]
+    pub client_version: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -123,6 +126,7 @@ impl Default for ServerConfig {
             tls_cert_path: None,
             tls_key_path: None,
             allowed_origins: Vec::new(),
+            client_version: None,
         }
     }
 }
