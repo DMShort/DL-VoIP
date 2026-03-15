@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod download;
 pub mod health;
 pub mod messages;
 pub mod metrics;
@@ -38,6 +39,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(metrics::routes())
         .merge(admin::admin_routes())
         .merge(web_admin::web_admin_routes())
+        .merge(download::routes())
         .route("/ws", get(websocket::ws_handler))
         .with_state(state)
 }
