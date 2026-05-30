@@ -3,7 +3,11 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::time::Instant;
 use tracing::{error, info, warn};
-use axum_server::tls_rustls::RustlsConfig;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder as ConnBuilder;
+use tokio_rustls::TlsAcceptor;
+use tokio_rustls::rustls::ServerConfig as TlsServerConfig;
+use hyper_util::service::TowerToHyperService;
 
 use voip_server::auth::session::{self, SessionCache};
 use voip_server::bootstrap;
@@ -131,17 +135,48 @@ async fn main() -> anyhow::Result<()> {
     // Start HTTP/HTTPS server
     let bind_addr = format!("{}:{}", config.server.bind_address, config.server.control_port);
 
-    match (&config.server.tls_cert_path, &config.server.tls_key_path) {
-        (Some(cert), Some(key)) => {
-            let tls_config = RustlsConfig::from_pem_file(cert, key).await
-                .map_err(|e| anyhow::anyhow!("Failed to load TLS certificate: {}", e))?;
-
-            let addr: std::net::SocketAddr = bind_addr.parse()?;
+    match (&config.server.tls_cert_path.clone(), &config.server.tls_key_path.clone()) {
+        (Some(cert_path), Some(key_path)) => {
+            let acceptor = build_tls_acceptor(cert_path, key_path)?;
+            let listener = TcpListener::bind(&bind_addr).await?;
             info!("Server listening on {} (TLS)", bind_addr);
 
-            axum_server::bind_rustls(addr, tls_config)
-                .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
-                .await?;
+            loop {
+                let (tcp_stream, remote_addr) = tokio::select! {
+                    res = listener.accept() => res?,
+                    _ = shutdown_signal() => break,
+                };
+
+                let acceptor = acceptor.clone();
+                let app = app.clone();
+
+                tokio::spawn(async move {
+                    let tls_stream = match acceptor.accept(tcp_stream).await {
+                        Ok(s) => s,
+                        Err(e) => { tracing::debug!("TLS accept error: {e}"); return; }
+                    };
+
+                    // Wrap router as a hyper service, injecting the peer addr as ConnectInfo
+                    let svc = TowerToHyperService::new(tower::service_fn(
+                        move |req: axum::http::Request<hyper::body::Incoming>| {
+                            let (mut parts, body) = req.into_parts();
+                            parts.extensions.insert(axum::extract::ConnectInfo(remote_addr));
+                            let req = axum::http::Request::from_parts(
+                                parts, axum::body::Body::new(body),
+                            );
+                            let mut app = app.clone();
+                            async move { tower::Service::call(&mut app, req).await }
+                        },
+                    ));
+
+                    if let Err(e) = ConnBuilder::new(TokioExecutor::new())
+                        .serve_connection_with_upgrades(TokioIo::new(tls_stream), svc)
+                        .await
+                    {
+                        tracing::debug!("Connection error: {e}");
+                    }
+                });
+            }
         }
         _ => {
             let listener = TcpListener::bind(&bind_addr).await?;
@@ -171,6 +206,30 @@ async fn shutdown_signal() {
     // existing handlers get this window to finish.
     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     info!("Drain timeout reached, forcing shutdown.");
+}
+
+fn build_tls_acceptor(cert_path: &str, key_path: &str) -> anyhow::Result<TlsAcceptor> {
+    use rustls_pemfile::{certs, private_key};
+    use std::io::BufReader;
+
+    let cert_file = std::fs::File::open(cert_path)
+        .map_err(|e| anyhow::anyhow!("Cannot open cert file {cert_path}: {e}"))?;
+    let cert_chain: Vec<_> = certs(&mut BufReader::new(cert_file))
+        .collect::<Result<_, _>>()
+        .map_err(|e| anyhow::anyhow!("Failed to parse cert PEM: {e}"))?;
+
+    let key_file = std::fs::File::open(key_path)
+        .map_err(|e| anyhow::anyhow!("Cannot open key file {key_path}: {e}"))?;
+    let key = private_key(&mut BufReader::new(key_file))
+        .map_err(|e| anyhow::anyhow!("Failed to parse key PEM: {e}"))?
+        .ok_or_else(|| anyhow::anyhow!("No private key found in {key_path}"))?;
+
+    let tls_config = TlsServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(cert_chain, key)
+        .map_err(|e| anyhow::anyhow!("Invalid TLS config: {e}"))?;
+
+    Ok(TlsAcceptor::from(Arc::new(tls_config)))
 }
 
 /// Mask the password portion of a database URL for logging

@@ -135,6 +135,9 @@ void WebSocketClient::onTextMessageReceived(const QString& message) {
 }
 
 void WebSocketClient::onSslErrors(const QList<QSslError>& errors) {
+    // VerifyNone is already set — ignore the errors so the connection proceeds.
+    // The UI is still notified so cert pinning can be offered for transparency.
+    m_socket.ignoreSslErrors();
     emit sslErrorOccurred(errors);
 }
 
