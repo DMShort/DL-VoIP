@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::time::Instant;
 use tracing::{error, info, warn};
+use axum_server::tls_rustls::RustlsConfig;
 
 use voip_server::auth::session::{self, SessionCache};
 use voip_server::bootstrap;
@@ -127,18 +128,33 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // Start HTTP server
+    // Start HTTP/HTTPS server
     let bind_addr = format!("{}:{}", config.server.bind_address, config.server.control_port);
 
-    let listener = TcpListener::bind(&bind_addr).await?;
-    info!("Server listening on {}", bind_addr);
+    match (&config.server.tls_cert_path, &config.server.tls_key_path) {
+        (Some(cert), Some(key)) => {
+            let tls_config = RustlsConfig::from_pem_file(cert, key).await
+                .map_err(|e| anyhow::anyhow!("Failed to load TLS certificate: {}", e))?;
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown_signal())
-    .await?;
+            let addr: std::net::SocketAddr = bind_addr.parse()?;
+            info!("Server listening on {} (TLS)", bind_addr);
+
+            axum_server::bind_rustls(addr, tls_config)
+                .serve(app.into_make_service_with_connect_info::<std::net::SocketAddr>())
+                .await?;
+        }
+        _ => {
+            let listener = TcpListener::bind(&bind_addr).await?;
+            info!("Server listening on {}", bind_addr);
+
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+            )
+            .with_graceful_shutdown(shutdown_signal())
+            .await?;
+        }
+    }
 
     info!("Server shut down gracefully.");
     Ok(())
