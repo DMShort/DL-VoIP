@@ -116,6 +116,24 @@ void AdminApi::removeRole(int roleId, int userId, SuccessCallback onSuccess, Err
     del(QString("/admin/roles/%1/assign/%2").arg(roleId).arg(userId), onSuccess, onError);
 }
 
+// --- Invites ---
+
+void AdminApi::listInvites(SuccessCallback onSuccess, ErrorCallback onError) {
+    get("/admin/invites", onSuccess, onError);
+}
+
+void AdminApi::createInvite(int maxUses, int expiresInHours,
+                             SuccessCallback onSuccess, ErrorCallback onError) {
+    QJsonObject body;
+    if (maxUses > 0)        body["max_uses"]         = maxUses;
+    if (expiresInHours > 0) body["expires_in_hours"] = expiresInHours;
+    post("/admin/invites", body, onSuccess, onError);
+}
+
+void AdminApi::revokeInvite(const QString& code, SuccessCallback onSuccess, ErrorCallback onError) {
+    del(QString("/admin/invites/%1").arg(code), onSuccess, onError);
+}
+
 // --- Audit ---
 
 void AdminApi::getAuditLog(int limit, int offset, SuccessCallback onSuccess, ErrorCallback onError) {

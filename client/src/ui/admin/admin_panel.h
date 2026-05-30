@@ -8,7 +8,7 @@
 
 class AdminApi;
 
-/// Admin panel with Users, Channels, and Roles tabs.
+/// Admin panel with Users, Channels, Roles, and Invites tabs.
 /// Only shown to users with admin permissions.
 class AdminPanel : public QWidget {
     Q_OBJECT
@@ -42,17 +42,25 @@ private slots:
     void onDeleteRole();
     void onAssignRole();
 
+    // Invites
+    void refreshInvites();
+    void onCreateInvite();
+    void onRevokeInvite();
+    void onCopyInviteCode();
+
 private:
     void setupUi();
     QWidget* createUsersTab();
     QWidget* createChannelsTab();
     QWidget* createRolesTab();
+    QWidget* createInvitesTab();
     void showError(const QString& message);
     void showSuccess(const QString& message);
 
     int selectedUserId() const;
     int selectedChannelId() const;
     int selectedRoleId() const;
+    QString selectedInviteCode() const;
 
     AdminApi* m_api;
     QTabWidget* m_tabs;
@@ -65,6 +73,9 @@ private:
 
     // Roles tab
     QTableWidget* m_rolesTable;
+
+    // Invites tab
+    QTableWidget* m_invitesTable;
 
     QLabel* m_statusLabel;
 };

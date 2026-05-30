@@ -14,6 +14,9 @@
 #include <QCheckBox>
 #include <QSpinBox>
 #include <QDialogButtonBox>
+#include <QClipboard>
+#include <QApplication>
+#include <QDateTime>
 
 AdminPanel::AdminPanel(AdminApi* api, QWidget* parent)
     : QWidget(parent)
@@ -31,6 +34,7 @@ void AdminPanel::setupUi() {
     m_tabs->addTab(createUsersTab(), "Users");
     m_tabs->addTab(createChannelsTab(), "Channels");
     m_tabs->addTab(createRolesTab(), "Roles");
+    m_tabs->addTab(createInvitesTab(), "Invites");
     layout->addWidget(m_tabs);
 
     m_statusLabel = new QLabel(this);
@@ -150,6 +154,7 @@ void AdminPanel::refresh() {
     refreshUsers();
     refreshChannels();
     refreshRoles();
+    refreshInvites();
 }
 
 void AdminPanel::onTabChanged(int index) {
@@ -157,6 +162,7 @@ void AdminPanel::onTabChanged(int index) {
     case 0: refreshUsers(); break;
     case 1: refreshChannels(); break;
     case 2: refreshRoles(); break;
+    case 3: refreshInvites(); break;
     }
 }
 
@@ -499,6 +505,159 @@ void AdminPanel::onAssignRole() {
     );
 }
 
+// --- Invites ---
+
+QWidget* AdminPanel::createInvitesTab() {
+    auto* widget = new QWidget(this);
+    auto* layout = new QVBoxLayout(widget);
+
+    m_invitesTable = new QTableWidget(this);
+    m_invitesTable->setColumnCount(4);
+    m_invitesTable->setHorizontalHeaderLabels({"Code", "Uses", "Expires", "Created"});
+    m_invitesTable->horizontalHeader()->setStretchLastSection(true);
+    m_invitesTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_invitesTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_invitesTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_invitesTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    layout->addWidget(m_invitesTable);
+
+    auto* btnLayout = new QHBoxLayout();
+    auto* createBtn = new QPushButton("Create Invite", this);
+    auto* copyBtn   = new QPushButton("Copy Code", this);
+    auto* revokeBtn = new QPushButton("Revoke", this);
+    auto* refreshBtn = new QPushButton("Refresh", this);
+
+    btnLayout->addWidget(createBtn);
+    btnLayout->addWidget(copyBtn);
+    btnLayout->addWidget(revokeBtn);
+    btnLayout->addStretch();
+    btnLayout->addWidget(refreshBtn);
+    layout->addLayout(btnLayout);
+
+    connect(createBtn,  &QPushButton::clicked, this, &AdminPanel::onCreateInvite);
+    connect(copyBtn,    &QPushButton::clicked, this, &AdminPanel::onCopyInviteCode);
+    connect(revokeBtn,  &QPushButton::clicked, this, &AdminPanel::onRevokeInvite);
+    connect(refreshBtn, &QPushButton::clicked, this, &AdminPanel::refreshInvites);
+
+    return widget;
+}
+
+void AdminPanel::refreshInvites() {
+    m_api->listInvites(
+        [this](const QJsonObject& response) {
+            auto invites = response["invites"].toArray();
+            m_invitesTable->setRowCount(invites.size());
+            for (int i = 0; i < invites.size(); ++i) {
+                auto inv = invites[i].toObject();
+
+                QString uses = inv["max_uses"].isNull()
+                    ? QString("%1 / unlimited").arg(inv["use_count"].toInt())
+                    : QString("%1 / %2").arg(inv["use_count"].toInt()).arg(inv["max_uses"].toInt());
+
+                QString expires = inv["expires_at"].isNull()
+                    ? "Never"
+                    : QDateTime::fromString(inv["expires_at"].toString(), Qt::ISODateWithMs)
+                          .toLocalTime().toString("dd MMM yyyy hh:mm");
+
+                QString created = QDateTime::fromString(inv["created_at"].toString(), Qt::ISODateWithMs)
+                                      .toLocalTime().toString("dd MMM yyyy hh:mm");
+
+                m_invitesTable->setItem(i, 0, new QTableWidgetItem(inv["code"].toString()));
+                m_invitesTable->setItem(i, 1, new QTableWidgetItem(uses));
+                m_invitesTable->setItem(i, 2, new QTableWidgetItem(expires));
+                m_invitesTable->setItem(i, 3, new QTableWidgetItem(created));
+            }
+            showSuccess(QString("%1 active invite code(s)").arg(invites.size()));
+        },
+        [this](int, const QString& err) { showError("Failed to load invites: " + err); }
+    );
+}
+
+void AdminPanel::onCreateInvite() {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Create Invite Code");
+    auto* form = new QFormLayout(&dialog);
+
+    auto* maxUses = new QSpinBox(&dialog);
+    maxUses->setRange(0, 10000);
+    maxUses->setValue(0);
+    maxUses->setSpecialValueText("Unlimited");
+
+    auto* expiryHours = new QSpinBox(&dialog);
+    expiryHours->setRange(0, 8760);
+    expiryHours->setValue(168);
+    expiryHours->setSuffix(" hours");
+    expiryHours->setSpecialValueText("Never expires");
+
+    form->addRow("Max Uses:", maxUses);
+    form->addRow("Expires In:", expiryHours);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted) return;
+
+    m_api->createInvite(maxUses->value(), expiryHours->value(),
+        [this](const QJsonObject& response) {
+            QString code = response["invite"].toObject()["code"].toString();
+
+            // Show code prominently with a Copy button
+            QDialog result(this);
+            result.setWindowTitle("Invite Code Created");
+            result.setFixedWidth(320);
+            auto* layout = new QVBoxLayout(&result);
+
+            auto* label = new QLabel("Share this code with your members:", &result);
+            label->setAlignment(Qt::AlignCenter);
+            layout->addWidget(label);
+
+            auto* codeLabel = new QLabel(code, &result);
+            codeLabel->setAlignment(Qt::AlignCenter);
+            codeLabel->setStyleSheet("font-size: 28px; font-weight: bold; font-family: monospace; "
+                                     "padding: 12px; background: #f0f0f0; border-radius: 4px;");
+            layout->addWidget(codeLabel);
+
+            auto* copyBtn = new QPushButton("Copy to Clipboard", &result);
+            connect(copyBtn, &QPushButton::clicked, [code, copyBtn]() {
+                QApplication::clipboard()->setText(code);
+                copyBtn->setText("Copied!");
+            });
+            layout->addWidget(copyBtn);
+
+            auto* closeBtn = new QPushButton("Close", &result);
+            connect(closeBtn, &QPushButton::clicked, &result, &QDialog::accept);
+            layout->addWidget(closeBtn);
+
+            result.exec();
+            refreshInvites();
+        },
+        [this](int, const QString& err) { showError("Failed to create invite: " + err); }
+    );
+}
+
+void AdminPanel::onRevokeInvite() {
+    QString code = selectedInviteCode();
+    if (code.isEmpty()) { showError("No invite selected"); return; }
+
+    if (QMessageBox::question(this, "Revoke Invite",
+            QString("Revoke invite code %1?\nAnyone with this code will no longer be able to register.").arg(code))
+        != QMessageBox::Yes) return;
+
+    m_api->revokeInvite(code,
+        [this](const QJsonObject&) { showSuccess("Invite revoked"); refreshInvites(); },
+        [this](int, const QString& err) { showError("Failed to revoke invite: " + err); }
+    );
+}
+
+void AdminPanel::onCopyInviteCode() {
+    QString code = selectedInviteCode();
+    if (code.isEmpty()) { showError("No invite selected"); return; }
+    QApplication::clipboard()->setText(code);
+    showSuccess(QString("Copied: %1").arg(code));
+}
+
 // --- Helpers ---
 
 int AdminPanel::selectedUserId() const {
@@ -520,6 +679,12 @@ int AdminPanel::selectedRoleId() const {
     if (items.isEmpty()) return -1;
     int row = items.first()->row();
     return m_rolesTable->item(row, 0)->text().toInt();
+}
+
+QString AdminPanel::selectedInviteCode() const {
+    auto items = m_invitesTable->selectedItems();
+    if (items.isEmpty()) return {};
+    return m_invitesTable->item(items.first()->row(), 0)->text();
 }
 
 void AdminPanel::showError(const QString& message) {

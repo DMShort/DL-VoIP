@@ -51,6 +51,11 @@ public:
     void assignRole(int roleId, int userId, SuccessCallback onSuccess, ErrorCallback onError);
     void removeRole(int roleId, int userId, SuccessCallback onSuccess, ErrorCallback onError);
 
+    // --- Invites ---
+    void listInvites(SuccessCallback onSuccess, ErrorCallback onError);
+    void createInvite(int maxUses, int expiresInHours, SuccessCallback onSuccess, ErrorCallback onError);
+    void revokeInvite(const QString& code, SuccessCallback onSuccess, ErrorCallback onError);
+
     // --- Audit ---
     void getAuditLog(int limit, int offset, SuccessCallback onSuccess, ErrorCallback onError);
 
