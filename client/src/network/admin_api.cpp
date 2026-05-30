@@ -7,7 +7,13 @@
 
 AdminApi::AdminApi(QObject* parent)
     : QObject(parent)
-{}
+{
+    // Ignore cert errors (hostname mismatch, self-signed) — same policy as WebSocket.
+    connect(&m_manager, &QNetworkAccessManager::sslErrors,
+            [](QNetworkReply* reply, const QList<QSslError>&) {
+                reply->ignoreSslErrors();
+            });
+}
 
 void AdminApi::configure(const QString& host, int port, bool useTls, const QString& token) {
     QString scheme = useTls ? "https" : "http";

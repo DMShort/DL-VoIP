@@ -20,6 +20,10 @@ RegisterDialog::RegisterDialog(const QString& serverAddress, int port, bool useT
     , m_orgTag(orgTag)
     , m_nam(new QNetworkAccessManager(this))
 {
+    connect(m_nam, &QNetworkAccessManager::sslErrors,
+            [](QNetworkReply* reply, const QList<QSslError>&) {
+                reply->ignoreSslErrors();
+            });
     setupUi();
 }
 
