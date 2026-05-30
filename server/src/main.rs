@@ -143,7 +143,10 @@ async fn main() -> anyhow::Result<()> {
 
             loop {
                 let (tcp_stream, remote_addr) = tokio::select! {
-                    res = listener.accept() => res?,
+                    res = listener.accept() => match res {
+                        Ok(s) => s,
+                        Err(e) => { tracing::error!("TCP accept error: {e}"); continue; }
+                    },
                     _ = shutdown_signal() => break,
                 };
 
@@ -153,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
                 tokio::spawn(async move {
                     let tls_stream = match acceptor.accept(tcp_stream).await {
                         Ok(s) => s,
-                        Err(e) => { tracing::debug!("TLS accept error: {e}"); return; }
+                        Err(e) => { tracing::warn!("TLS handshake failed from {remote_addr}: {e}"); return; }
                     };
 
                     // Wrap router as a hyper service, injecting the peer addr as ConnectInfo
