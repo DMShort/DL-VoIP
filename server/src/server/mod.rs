@@ -4,12 +4,13 @@ pub mod health;
 pub mod messages;
 pub mod metrics;
 pub mod rate_limit;
+pub mod register;
 pub mod web_admin;
 pub mod websocket;
 
 use std::sync::Arc;
 
-use axum::{routing::get, Router};
+use axum::{routing::{get, post}, Router};
 use sqlx::PgPool;
 use tokio::time::Instant;
 
@@ -40,6 +41,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(admin::admin_routes())
         .merge(web_admin::web_admin_routes())
         .merge(download::routes())
+        .route("/register", post(register::register))
         .route("/ws", get(websocket::ws_handler))
         .with_state(state)
 }

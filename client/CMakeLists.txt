@@ -26,6 +26,7 @@ set(SOURCES
     src/config/config.cpp
     src/network/websocket_client.cpp
     src/ui/login_dialog.cpp
+    src/ui/register_dialog.cpp
     src/ui/main_window.cpp
     src/ui/channel_tree.cpp
     src/ui/user_list.cpp
@@ -49,6 +50,7 @@ set(HEADERS
     src/network/websocket_client.h
     src/network/admin_api.h
     src/ui/login_dialog.h
+    src/ui/register_dialog.h
     src/ui/main_window.h
     src/ui/channel_tree.h
     src/ui/user_list.h

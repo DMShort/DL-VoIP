@@ -1,4 +1,5 @@
 pub mod channels;
+pub mod invites;
 pub mod middleware;
 pub mod roles;
 pub mod sessions;
@@ -13,10 +14,15 @@ pub fn admin_routes() -> Router<AppState> {
         // Users
         .route("/admin/users", get(users::list_users))
         .route("/admin/users", post(users::create_user))
+        .route("/admin/users/bulk", post(users::bulk_create_users))
         .route("/admin/users/:user_id", get(users::get_user))
         .route("/admin/users/:user_id", put(users::update_user))
         .route("/admin/users/:user_id", delete(users::delete_user))
         .route("/admin/users/:user_id/sessions", delete(sessions::revoke_user_sessions))
+        // Invites
+        .route("/admin/invites", get(invites::list_invites))
+        .route("/admin/invites", post(invites::create_invite))
+        .route("/admin/invites/:code", delete(invites::revoke_invite))
         // Channels
         .route("/admin/channels", get(channels::list_channels))
         .route("/admin/channels", post(channels::create_channel))

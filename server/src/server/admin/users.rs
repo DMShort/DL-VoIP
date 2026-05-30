@@ -279,6 +279,85 @@ pub async fn update_user(
     }
 }
 
+pub async fn bulk_create_users(
+    State(state): State<AppState>,
+    auth: AdminAuth,
+    Json(body): Json<Vec<CreateUserRequest>>,
+) -> impl IntoResponse {
+    if body.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Request body must be a non-empty array"})),
+        )
+            .into_response();
+    }
+
+    let mut created = Vec::new();
+    let mut failed: Vec<serde_json::Value> = Vec::new();
+
+    for req in body {
+        if req.username.is_empty() || req.password.is_empty() {
+            failed.push(json!({"username": req.username, "error": "Username and password are required"}));
+            continue;
+        }
+        if req.password.len() < 8 {
+            failed.push(json!({"username": req.username, "error": "Password must be at least 8 characters"}));
+            continue;
+        }
+
+        let hash = match password::hash_password(&req.password) {
+            Ok(h) => h,
+            Err(_) => {
+                failed.push(json!({"username": req.username, "error": "Failed to hash password"}));
+                continue;
+            }
+        };
+
+        match db::users::create_user(
+            &state.pool,
+            auth.org_id,
+            &req.username,
+            &hash,
+            req.display_name.as_deref(),
+            req.is_admin.unwrap_or(false),
+        )
+        .await
+        {
+            Ok(user) => {
+                let _ = db::audit::log_action(
+                    &state.pool,
+                    auth.org_id,
+                    auth.user_id,
+                    "create_user",
+                    Some("user"),
+                    Some(user.id),
+                    Some(json!({"username": user.username, "bulk": true})),
+                    None,
+                )
+                .await;
+                created.push(user);
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                let reason = if msg.contains("duplicate") || msg.contains("unique") {
+                    "Username already exists".to_string()
+                } else {
+                    format!("Database error: {}", e)
+                };
+                failed.push(json!({"username": req.username, "error": reason}));
+            }
+        }
+    }
+
+    let status = if created.is_empty() && !failed.is_empty() {
+        StatusCode::UNPROCESSABLE_ENTITY
+    } else {
+        StatusCode::CREATED
+    };
+
+    (status, Json(json!({"created": created, "failed": failed}))).into_response()
+}
+
 pub async fn delete_user(
     State(state): State<AppState>,
     auth: AdminAuth,

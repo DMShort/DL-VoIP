@@ -94,8 +94,14 @@ void LoginDialog::setupUi() {
     m_progress->hide();
     mainLayout->addWidget(m_progress);
 
-    // Connect button
+    // Buttons
     auto* btnLayout = new QHBoxLayout();
+
+    m_registerBtn = new QPushButton("Register", this);
+    m_registerBtn->setMinimumWidth(100);
+    m_registerBtn->setToolTip("Create a new account using an invite code");
+    btnLayout->addWidget(m_registerBtn);
+
     btnLayout->addStretch();
 
     m_connectBtn = new QPushButton("Connect", this);
@@ -112,7 +118,8 @@ void LoginDialog::setupUi() {
     connect(m_username, &QLineEdit::textChanged, this, &LoginDialog::validateInputs);
     connect(m_password, &QLineEdit::textChanged, this, &LoginDialog::validateInputs);
 
-    connect(m_connectBtn, &QPushButton::clicked, this, &LoginDialog::onConnectClicked);
+    connect(m_connectBtn,  &QPushButton::clicked, this, &LoginDialog::onConnectClicked);
+    connect(m_registerBtn, &QPushButton::clicked, this, &LoginDialog::onRegisterClicked);
 
     // Enter key triggers connect
     connect(m_password, &QLineEdit::returnPressed, this, [this]() {
@@ -302,6 +309,25 @@ void LoginDialog::onSslErrors(const QList<QSslError>& errors) {
     }
 }
 
+void LoginDialog::onRegisterClicked() {
+    // Pre-fill server info from whatever is currently in the form
+    RegisterDialog dlg(
+        m_serverAddress->text().trimmed(),
+        m_serverPort->value(),
+        m_useTls->isChecked(),
+        m_orgTag->text().trimmed(),
+        this
+    );
+
+    if (dlg.exec() == QDialog::Accepted) {
+        // Pre-fill login with the new username
+        m_username->setText(dlg.registeredUsername());
+        m_password->clear();
+        m_password->setFocus();
+        showStatus("Account created. Enter your password and connect.");
+    }
+}
+
 void LoginDialog::setFormEnabled(bool enabled) {
     m_serverAddress->setEnabled(enabled);
     m_serverPort->setEnabled(enabled);
@@ -311,6 +337,7 @@ void LoginDialog::setFormEnabled(bool enabled) {
     m_useTls->setEnabled(enabled);
     m_rememberMe->setEnabled(enabled);
     m_connectBtn->setEnabled(enabled);
+    m_registerBtn->setEnabled(enabled);
 }
 
 void LoginDialog::showError(const QString& message) {

@@ -11,6 +11,7 @@
 #include <QJsonArray>
 
 #include "config/config.h"
+#include "ui/register_dialog.h"
 
 class WebSocketClient;
 
@@ -40,6 +41,7 @@ public:
 
 private slots:
     void onConnectClicked();
+    void onRegisterClicked();
     void onConnected();
     void onDisconnected();
     void onChallengeReceived(const QStringList& methods);
@@ -69,6 +71,7 @@ private:
     QCheckBox* m_useTls;
     QCheckBox* m_rememberMe;
     QPushButton* m_connectBtn;
+    QPushButton* m_registerBtn;
     QProgressBar* m_progress;
     QLabel* m_statusLabel;
     QLabel* m_errorLabel;

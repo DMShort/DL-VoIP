@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod channels;
+pub mod invites;
 pub mod models;
 pub mod organizations;
 pub mod roles;

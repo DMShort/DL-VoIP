@@ -67,6 +67,18 @@ pub struct Channel {
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct Invite {
+    pub id: i32,
+    pub org_id: i32,
+    pub code: String,
+    pub created_by: i32,
+    pub max_uses: Option<i32>,
+    pub use_count: i32,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub created_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct AuditEntry {
     pub id: i64,
     pub org_id: Option<i32>,
