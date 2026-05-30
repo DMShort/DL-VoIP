@@ -135,10 +135,30 @@ void WebSocketClient::onTextMessageReceived(const QString& message) {
 }
 
 void WebSocketClient::onSslErrors(const QList<QSslError>& errors) {
-    // VerifyNone is already set — ignore the errors so the connection proceeds.
-    // The UI is still notified so cert pinning can be offered for transparency.
+    // Cert errors (hostname mismatch, self-signed, unknown CA) are expected when
+    // connecting to a server whose cert hostname differs from the address typed
+    // (e.g. localhost vs scda-link.duckdns.org). VerifyNone is already set so
+    // we just tell Qt to proceed. Only escalate genuine protocol-level failures.
+    bool onlyCertErrors = std::all_of(errors.begin(), errors.end(), [](const QSslError& e) {
+        switch (e.error()) {
+            case QSslError::HostNameMismatch:
+            case QSslError::SelfSignedCertificate:
+            case QSslError::SelfSignedCertificateInChain:
+            case QSslError::UnableToGetLocalIssuerCertificate:
+            case QSslError::UnableToVerifyFirstCertificate:
+            case QSslError::CertificateUntrusted:
+            case QSslError::InvalidCaCertificate:
+                return true;
+            default:
+                return false;
+        }
+    });
+
     m_socket.ignoreSslErrors();
-    emit sslErrorOccurred(errors);
+
+    if (!onlyCertErrors) {
+        emit sslErrorOccurred(errors);
+    }
 }
 
 void WebSocketClient::onPingTimer() {
