@@ -139,6 +139,15 @@ void VoiceSession::setPttActive(bool active) {
     m_pttActive.store(active, std::memory_order_relaxed);
 }
 
+void VoiceSession::setOpenMic(uint32_t channelId, bool enabled) {
+    if (enabled) {
+        m_openMicChannels.insert(channelId);
+    } else {
+        m_openMicChannels.remove(channelId);
+    }
+    qDebug() << "[VOICE] open mic" << (enabled ? "ON" : "OFF") << "for ch=" << channelId;
+}
+
 void VoiceSession::setInputVolume(float v) {
     m_audioEngine.setInputVolume(v);
 }
@@ -178,13 +187,16 @@ void VoiceSession::removeChannelSettings(uint32_t channelId) {
 // --- Transmit path (20ms timer) ---
 
 void VoiceSession::onTransmitTimer() {
-    if (!m_pttActive.load(std::memory_order_relaxed)) return;
+    bool pttActive = m_pttActive.load(std::memory_order_relaxed);
+    bool hasOpenMic = !m_openMicChannels.isEmpty();
+
+    if (!pttActive && !hasOpenMic) return;
     if (!m_srtpSession || !m_srtpSession->isReady()) {
         if (m_txSequence == 0) qDebug() << "[TX] SRTP not ready";
         return;
     }
 
-    // Read one frame from capture buffer
+    // Read and encode audio once regardless of how many channels we transmit to
     float pcm[AudioEngine::FramesPerBuffer];
     size_t read = m_audioEngine.readCapture(pcm, AudioEngine::FramesPerBuffer);
     if (read < AudioEngine::FramesPerBuffer) {
@@ -192,40 +204,41 @@ void VoiceSession::onTransmitTimer() {
         return;
     }
 
-    // Opus encode
     auto encoded = m_opusCodec.encode(pcm, AudioEngine::FramesPerBuffer);
     if (encoded.empty()) { qDebug() << "[TX] Opus encode failed"; return; }
 
-    // SRTP encrypt
     auto encrypted = m_srtpSession->encrypt(encoded.data(), encoded.size(), m_txSequence);
     if (encrypted.empty()) { qDebug() << "[TX] SRTP encrypt failed"; return; }
 
-    // Build voice packet
-    VoicePacket pkt;
-    pkt.sequence = m_txSequence;
-    pkt.timestamp = m_txTimestamp;
-    pkt.channelId = m_channelId;
-    pkt.userId = m_userId;
-
-    auto bytes = pkt.toBytes(encrypted.data(), encrypted.size());
-
-    if (m_txSequence % 50 == 0) {
-        qDebug() << "[TX] Sending pkt seq=" << m_txSequence
-                 << "ch=" << m_channelId << "user=" << m_userId
-                 << "size=" << bytes.size()
-                 << "to" << m_serverHost << ":" << m_voicePort;
+    // Build the set of channels to transmit to this tick:
+    //   - always: all open-mic channels
+    //   - if PTT held: also the current PTT target channel
+    QSet<uint32_t> targets = m_openMicChannels;
+    if (pttActive) {
+        targets.insert(m_channelId);
     }
 
-    // Send via UDP using pre-resolved address
-    auto sent = m_udpSocket.writeDatagram(
-        reinterpret_cast<const char*>(bytes.data()),
-        static_cast<qint64>(bytes.size()),
-        m_resolvedAddr,
-        static_cast<quint16>(m_voicePort)
-    );
+    for (uint32_t chId : targets) {
+        VoicePacket pkt;
+        pkt.sequence  = m_txSequence;
+        pkt.timestamp = m_txTimestamp;
+        pkt.channelId = chId;
+        pkt.userId    = m_userId;
 
-    if (sent < 0) {
-        qDebug() << "[TX] UDP send failed:" << m_udpSocket.errorString();
+        auto bytes = pkt.toBytes(encrypted.data(), encrypted.size());
+
+        if (m_txSequence % 50 == 0) {
+            qDebug() << "[TX] seq=" << m_txSequence << "ch=" << chId
+                     << "user=" << m_userId << "size=" << bytes.size()
+                     << (m_openMicChannels.contains(chId) ? "[open-mic]" : "[ptt]");
+        }
+
+        m_udpSocket.writeDatagram(
+            reinterpret_cast<const char*>(bytes.data()),
+            static_cast<qint64>(bytes.size()),
+            m_resolvedAddr,
+            static_cast<quint16>(m_voicePort)
+        );
     }
 
     m_txSequence++;

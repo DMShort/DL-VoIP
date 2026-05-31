@@ -51,6 +51,9 @@ signals:
     /// Emitted when user toggles channel mute (via context menu).
     void channelMuteToggled(int channelId, bool muted);
 
+    /// Emitted when user toggles open mic for a channel (via context menu).
+    void channelOpenMicToggled(int channelId, bool enabled);
+
 private:
     void buildTree(const QJsonArray& channels);
     QTreeWidgetItem* findItem(int channelId) const;
@@ -60,4 +63,5 @@ private:
     int m_currentChannelId = -1;
     QSet<int> m_joinedChannels;
     QSet<int> m_mutedChannels;
+    QSet<int> m_openMicChannels;
 };

@@ -30,20 +30,41 @@ ChannelTree::ChannelTree(QWidget* parent)
 
         QMenu menu(this);
 
-        bool isMuted = m_mutedChannels.contains(channelId);
+        bool isMuted   = m_mutedChannels.contains(channelId);
+        bool isOpenMic = m_openMicChannels.contains(channelId);
+
         menu.addAction(isMuted ? "Unmute Channel" : "Mute Channel", this, [this, channelId, isMuted]() {
             if (isMuted) {
                 m_mutedChannels.remove(channelId);
             } else {
                 m_mutedChannels.insert(channelId);
             }
-            // Update visual — muted channels show dimmed
-            QTreeWidgetItem* item = findItem(channelId);
-            if (item) {
-                item->setForeground(0, QBrush(m_mutedChannels.contains(channelId)
-                    ? QColor(128, 128, 128) : QColor(0, 200, 0)));
+            QTreeWidgetItem* i = findItem(channelId);
+            if (i) {
+                bool om = m_openMicChannels.contains(channelId);
+                bool mu = m_mutedChannels.contains(channelId);
+                i->setForeground(0, QBrush(mu ? QColor(128, 128, 128)
+                                         : om ? QColor(255, 165, 0)
+                                              : QColor(0, 200, 0)));
             }
             emit channelMuteToggled(channelId, !isMuted);
+        });
+
+        menu.addAction(isOpenMic ? "Disable Open Mic" : "Enable Open Mic", this, [this, channelId, isOpenMic]() {
+            if (isOpenMic) {
+                m_openMicChannels.remove(channelId);
+            } else {
+                m_openMicChannels.insert(channelId);
+            }
+            QTreeWidgetItem* i = findItem(channelId);
+            if (i) {
+                bool om = m_openMicChannels.contains(channelId);
+                bool mu = m_mutedChannels.contains(channelId);
+                i->setForeground(0, QBrush(mu ? QColor(128, 128, 128)
+                                         : om ? QColor(255, 165, 0)   // orange = open mic
+                                              : QColor(0, 200, 0)));  // green  = normal joined
+            }
+            emit channelOpenMicToggled(channelId, !isOpenMic);
         });
 
         menu.addSeparator();
@@ -154,6 +175,7 @@ void ChannelTree::addJoinedChannel(int channelId) {
 
 void ChannelTree::removeJoinedChannel(int channelId) {
     m_joinedChannels.remove(channelId);
+    m_openMicChannels.remove(channelId);
     QTreeWidgetItem* item = findItem(channelId);
     if (item) {
         QFont f = item->font(0);

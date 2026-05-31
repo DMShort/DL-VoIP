@@ -24,6 +24,7 @@ struct ChannelAudioConfig {
     float volume = 1.0f;   // 0.0 – 1.0
     int priority = 5;     // 1 = highest, 10 = lowest
     bool muted = false;
+    bool openMic = false;  // always transmit in this channel (no PTT required)
 };
 
 struct VoiceSettings {
