@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QSet>
 #include <QUdpSocket>
 #include <QThread>
 #include <QTimer>
@@ -52,6 +53,10 @@ public:
 
     /// Set PTT state — when true, captured audio is transmitted.
     void setPttActive(bool active);
+
+    /// Enable/disable open mic for a channel.
+    /// Open-mic channels always transmit regardless of PTT state.
+    void setOpenMic(uint32_t channelId, bool enabled);
 
     /// Set input/output volume.
     void setInputVolume(float v);
@@ -134,6 +139,9 @@ private:
 
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_pttActive{false};
+
+    // Channels that always transmit (open mic) — Qt main thread only, no mutex needed
+    QSet<uint32_t> m_openMicChannels;
 
     void onPlaybackTimer();
 };

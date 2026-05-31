@@ -306,6 +306,34 @@ void MainWindow::connectSignals() {
                                 muted ? QColor(128, 128, 128) : QColor(0, 200, 0));
     });
 
+    connect(m_channelTree, &ChannelTree::channelOpenMicToggled, this, [this](int channelId, bool enabled) {
+        m_voiceSession.setOpenMic(static_cast<uint32_t>(channelId), enabled);
+        m_config.channelAudio[channelId].openMic = enabled;
+        m_config.save();
+
+        // Update PTT indicator to reflect open-mic state
+        if (enabled) {
+            m_pttIndicator->setText(QString("OPEN MIC: CH #%1").arg(channelId));
+            m_pttIndicator->setStyleSheet("background: #4a3000; color: #ffa500; border-radius: 4px; padding: 4px; font-weight: bold;");
+        } else {
+            // Check if any other channel still has open mic active
+            bool anyOpenMic = false;
+            for (int chId : m_joinedChannels) {
+                if (m_config.channelAudio.contains(chId) && m_config.channelAudio[chId].openMic) {
+                    anyOpenMic = true; break;
+                }
+            }
+            if (!anyOpenMic) {
+                m_pttIndicator->setText("PTT: OFF");
+                m_pttIndicator->setStyleSheet("background: #333; color: #888; border-radius: 4px; padding: 4px;");
+            }
+        }
+
+        m_activityLog->addEntry(
+            QString("Channel #%1 open mic %2").arg(channelId).arg(enabled ? "enabled" : "disabled"),
+            enabled ? QColor(255, 165, 0) : QColor(128, 128, 128));
+    });
+
     // Voice controls
     connect(m_muteBtn, &QPushButton::clicked, this, &MainWindow::onMuteToggled);
     connect(m_deafenBtn, &QPushButton::clicked, this, &MainWindow::onDeafenToggled);
@@ -340,6 +368,13 @@ void MainWindow::onChannelJoined(int channelId, const QJsonArray& roster) {
     if (m_joinedChannels.size() == 1) {
         m_voiceSession.setIdentity(static_cast<uint32_t>(m_userId),
                                     static_cast<uint32_t>(channelId));
+    }
+
+    // Restore open-mic preference from config
+    if (m_config.channelAudio.contains(channelId) && m_config.channelAudio[channelId].openMic) {
+        m_voiceSession.setOpenMic(static_cast<uint32_t>(channelId), true);
+        m_pttIndicator->setText(QString("OPEN MIC: CH #%1").arg(channelId));
+        m_pttIndicator->setStyleSheet("background: #4a3000; color: #ffa500; border-radius: 4px; padding: 4px; font-weight: bold;");
     }
 
     m_activityLog->addEntry(QString("Joined channel #%1 (%2 channels active)")
@@ -572,6 +607,7 @@ void MainWindow::onChannelLeaveRequested(int channelId) {
     m_channelRosters.remove(channelId);
     m_channelTree->removeJoinedChannel(channelId);
     m_pttManager.removeHotkey(channelId);
+    m_voiceSession.setOpenMic(static_cast<uint32_t>(channelId), false);
 
     if (channelId == m_viewedChannelId) {
         m_viewedChannelId = -1;

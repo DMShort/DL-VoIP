@@ -139,9 +139,10 @@ QJsonObject AppConfig::channelAudioToJson() const {
     QJsonObject obj;
     for (auto it = channelAudio.constBegin(); it != channelAudio.constEnd(); ++it) {
         QJsonObject ch;
-        ch["volume"]   = static_cast<double>(it.value().volume);
-        ch["priority"] = it.value().priority;
-        ch["muted"]    = it.value().muted;
+        ch["volume"]    = static_cast<double>(it.value().volume);
+        ch["priority"]  = it.value().priority;
+        ch["muted"]     = it.value().muted;
+        ch["open_mic"]  = it.value().openMic;
         obj[QString::number(it.key())] = ch;
     }
     return obj;
@@ -222,6 +223,7 @@ void AppConfig::channelAudioFromJson(const QJsonObject& obj) {
         cfg.volume   = static_cast<float>(ch["volume"].toDouble(1.0));
         cfg.priority = ch["priority"].toInt(5);
         cfg.muted    = ch["muted"].toBool(false);
+        cfg.openMic  = ch["open_mic"].toBool(false);
         channelAudio[channelId] = cfg;
     }
 }
