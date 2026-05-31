@@ -82,6 +82,7 @@ document.querySelectorAll('.nav-links a').forEach(link => {
         else if (tab === 'users') loadUsers();
         else if (tab === 'channels') loadChannels();
         else if (tab === 'roles') loadRoles();
+        else if (tab === 'invites') loadInvites();
         else if (tab === 'audit') loadAudit();
     });
 });
@@ -384,6 +385,96 @@ async function deleteRole(roleId, name) {
     if (!confirm('Delete role "' + name + '"?')) return;
     await api('DELETE', '/admin/roles/' + roleId);
     loadRoles();
+}
+
+// --- Invites ---
+
+async function loadInvites() {
+    const data = await api('GET', '/admin/invites');
+    if (!data) return;
+    const tbody = document.querySelector('#invites-table tbody');
+    if (!data.invites || data.invites.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888">No active invite codes</td></tr>';
+        return;
+    }
+    tbody.innerHTML = data.invites.map(inv => {
+        const uses = inv.max_uses == null
+            ? inv.use_count + ' / unlimited'
+            : inv.use_count + ' / ' + inv.max_uses;
+        const expires = inv.expires_at
+            ? new Date(inv.expires_at).toLocaleString()
+            : 'Never';
+        const created = new Date(inv.created_at).toLocaleString();
+        return `<tr>
+            <td><code style="font-size:1.1em;letter-spacing:2px;color:#53a8b6">${esc(inv.code)}</code></td>
+            <td>${uses}</td>
+            <td>${expires}</td>
+            <td>${created}</td>
+            <td>
+                <button class="btn-icon" onclick="copyInviteCode('${esc(inv.code)}')" title="Copy code">&#128203;</button>
+                <button class="btn-icon danger" onclick="revokeInvite('${esc(inv.code)}')" title="Revoke">&#10005;</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function showCreateInvite() {
+    openModal('Create Invite Code', `
+        <div class="form-group">
+            <label>Max Uses (0 = unlimited)</label>
+            <input type="number" id="m-inv-uses" value="0" min="0">
+        </div>
+        <div class="form-group">
+            <label>Expires In (hours, 0 = never)</label>
+            <input type="number" id="m-inv-hours" value="168" min="0">
+            <small style="color:#888">168 hours = 7 days</small>
+        </div>
+    `, [
+        { text: 'Cancel', cls: 'btn-secondary', action: closeModal },
+        { text: 'Generate', cls: 'btn-primary', action: createInvite },
+    ]);
+}
+
+async function createInvite() {
+    const body = {};
+    const uses = parseInt(document.getElementById('m-inv-uses').value);
+    const hours = parseInt(document.getElementById('m-inv-hours').value);
+    if (uses > 0) body.max_uses = uses;
+    if (hours > 0) body.expires_in_hours = hours;
+
+    const res = await api('POST', '/admin/invites', body);
+    if (!res || !res.invite) return;
+
+    const code = res.invite.code;
+    closeModal();
+
+    openModal('Invite Code Created', `
+        <div style="text-align:center;padding:16px 0">
+            <p style="color:#888;margin-bottom:12px">Share this code with your members:</p>
+            <div style="font-size:2em;font-weight:bold;letter-spacing:6px;color:#53a8b6;
+                        background:#0f3460;padding:16px;border-radius:8px;font-family:monospace">
+                ${esc(code)}
+            </div>
+            <p style="color:#888;margin-top:12px;font-size:0.85em">
+                Members enter this in the Register screen of the client app.
+            </p>
+        </div>
+    `, [
+        { text: 'Copy Code', cls: 'btn-primary', action: () => { navigator.clipboard.writeText(code); } },
+        { text: 'Close', cls: 'btn-secondary', action: () => { closeModal(); loadInvites(); } },
+    ]);
+}
+
+function copyInviteCode(code) {
+    navigator.clipboard.writeText(code).then(() => {
+        alert('Copied: ' + code);
+    });
+}
+
+async function revokeInvite(code) {
+    if (!confirm('Revoke invite code "' + code + '"? Anyone with this code will no longer be able to register.')) return;
+    await api('DELETE', '/admin/invites/' + code);
+    loadInvites();
 }
 
 // --- Audit ---
