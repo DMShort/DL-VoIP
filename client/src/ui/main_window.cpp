@@ -212,6 +212,7 @@ void MainWindow::setupMenuBar() {
         connect(&dialog, &SettingsDialog::audioSettingsChanged, this, [this]() {
             m_voiceSession.setInputVolume(m_config.audio.inputVolume);
             m_voiceSession.setOutputVolume(m_config.audio.outputVolume);
+            m_voiceSession.setDevices(m_config.audio.inputDeviceId, m_config.audio.outputDeviceId);
         });
         dialog.exec();
     });
@@ -494,7 +495,12 @@ void MainWindow::onKeyExchangeComplete() {
         m_voiceSession.setSrtpSession(&m_srtpSession);
         qDebug() << "[MW] Starting voice session...";
         if (m_voiceSession.start()) {
-            m_activityLog->addEntry("Voice session started.", QColor(0, 200, 0));
+            auto& ae = m_voiceSession.audioEngine();
+            m_activityLog->addEntry(
+                QString("Voice session started. In: %1 | Out: %2")
+                    .arg(QString::fromStdString(ae.captureDeviceName()))
+                    .arg(QString::fromStdString(ae.playbackDeviceName())),
+                QColor(0, 200, 0));
 
             // Start VU meters
             m_inputMeter->setLevelSource([this]() { return m_voiceSession.inputLevel(); });

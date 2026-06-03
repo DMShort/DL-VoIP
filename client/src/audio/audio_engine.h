@@ -83,6 +83,13 @@ public:
     bool isPlaying() const { return m_playbackStream != nullptr; }
     bool isInitialized() const { return m_initialized; }
 
+    /// Human-readable description of the last PortAudio error.
+    const std::string& lastError() const { return m_lastError; }
+
+    /// Name of the device currently open for capture/playback (empty if not open).
+    std::string captureDeviceName() const;
+    std::string playbackDeviceName() const;
+
 private:
     static int captureCallback(const void* input, void* output,
                                unsigned long frameCount,
@@ -99,6 +106,9 @@ private:
     bool m_initialized = false;
     PaStream* m_captureStream = nullptr;
     PaStream* m_playbackStream = nullptr;
+    std::string m_lastError;
+    PaDeviceIndex m_captureDeviceIndex = paNoDevice;
+    PaDeviceIndex m_playbackDeviceIndex = paNoDevice;
 
     // Ring buffers: ~200ms capacity (about 10 frames)
     std::unique_ptr<RingBuffer<float>> m_captureBuffer;

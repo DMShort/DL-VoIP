@@ -62,6 +62,9 @@ public:
     void setInputVolume(float v);
     void setOutputVolume(float v);
 
+    /// Switch audio devices. If the session is running, restarts the audio streams.
+    void setDevices(int inputDeviceId, int outputDeviceId);
+
     /// Per-channel audio controls.
     void setChannelVolume(uint32_t channelId, float volume);  // 0.0 – 1.0
     void setChannelPriority(uint32_t channelId, int priority); // 1 = highest
@@ -102,6 +105,9 @@ private:
     QString m_serverHost;
     QHostAddress m_resolvedAddr; // cached resolved IPv4 address
     int m_voicePort = 9001;
+
+    int m_inputDeviceId = -1;
+    int m_outputDeviceId = -1;
 
     uint32_t m_userId = 0;
     uint32_t m_channelId = 0;

@@ -28,6 +28,9 @@ VoiceSession::~VoiceSession() {
 
 bool VoiceSession::initialize(int inputDeviceId, int outputDeviceId,
                                int bitrate, int complexity, bool fec, bool dtx) {
+    m_inputDeviceId = inputDeviceId;
+    m_outputDeviceId = outputDeviceId;
+
     if (!m_audioEngine.initialize()) {
         emit error("Failed to initialize audio engine");
         return false;
@@ -94,13 +97,15 @@ bool VoiceSession::start() {
     qDebug() << "[VOICE] UDP bound to port" << m_udpSocket.localPort();
 
     // Start audio streams
-    if (!m_audioEngine.startCapture()) {
-        emit error("Failed to start audio capture");
+    if (!m_audioEngine.startCapture(m_inputDeviceId)) {
+        emit error(QString("Failed to start audio capture: %1")
+                   .arg(QString::fromStdString(m_audioEngine.lastError())));
         return false;
     }
 
-    if (!m_audioEngine.startPlayback()) {
-        emit error("Failed to start audio playback");
+    if (!m_audioEngine.startPlayback(m_outputDeviceId)) {
+        emit error(QString("Failed to start audio playback: %1")
+                   .arg(QString::fromStdString(m_audioEngine.lastError())));
         m_audioEngine.stopCapture();
         return false;
     }
@@ -154,6 +159,24 @@ void VoiceSession::setInputVolume(float v) {
 
 void VoiceSession::setOutputVolume(float v) {
     m_audioEngine.setOutputVolume(v);
+}
+
+void VoiceSession::setDevices(int inputDeviceId, int outputDeviceId) {
+    m_inputDeviceId = inputDeviceId;
+    m_outputDeviceId = outputDeviceId;
+
+    if (!m_running.load()) return;
+
+    m_audioEngine.stopCapture();
+    m_audioEngine.stopPlayback();
+
+    if (!m_audioEngine.startCapture(m_inputDeviceId))
+        emit error(QString("Failed to restart audio capture: %1")
+                   .arg(QString::fromStdString(m_audioEngine.lastError())));
+
+    if (!m_audioEngine.startPlayback(m_outputDeviceId))
+        emit error(QString("Failed to restart audio playback: %1")
+                   .arg(QString::fromStdString(m_audioEngine.lastError())));
 }
 
 float VoiceSession::inputLevel() const {

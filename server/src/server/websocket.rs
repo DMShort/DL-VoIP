@@ -162,7 +162,7 @@ async fn handle_message(
         _ if !conn.authenticated => {
             let _ = tx.send(make_error("not_authenticated", "Please authenticate first"));
         }
-        "join_channel" => handle_join_channel(&envelope.payload, state, tx, conn).await,
+        "join_channel" => handle_join_channel(&envelope.payload, state, tx, &mut *conn).await,
         "leave_channel" => handle_leave_channel(&envelope.payload, state, conn).await,
         "set_muted" => handle_set_muted(&envelope.payload, state, conn).await,
         "set_deafened" => handle_set_deafened(&envelope.payload, state, conn).await,
@@ -314,12 +314,6 @@ async fn handle_authenticate(
             super::metrics::metrics().total_auth_successes.inc();
             info!("User '{}' authenticated (id={})", user.username, user.id);
 
-            // Initiate SRTP key exchange
-            let (ke_secret, server_public) = key_exchange::generate_keypair();
-            conn.ke_secret = Some(ke_secret);
-
-            let ke_init_b64 = base64_encode(&server_public);
-
             // Send auth success
             let _ = tx.send(Envelope::new("auth_success", &AuthSuccessPayload {
                 user_id: user.id,
@@ -331,10 +325,6 @@ async fn handle_authenticate(
                 client_download_url: state.config.server.client_download_url.clone(),
             }).to_json());
 
-            // Send key exchange init
-            let _ = tx.send(Envelope::new("key_exchange_init", &KeyExchangeInitPayload {
-                public_key: ke_init_b64,
-            }).to_json());
         }
         Err(reason) => {
             super::metrics::metrics().total_auth_failures.inc();
@@ -418,7 +408,7 @@ async fn handle_join_channel(
     payload: &serde_json::Value,
     state: &AppState,
     tx: &mpsc::UnboundedSender<String>,
-    conn: &ConnState,
+    conn: &mut ConnState,
 ) {
     let join: JoinChannelPayload = match serde_json::from_value(payload.clone()) {
         Ok(j) => j,
@@ -493,6 +483,14 @@ async fn handle_join_channel(
 
     // Broadcast updated user count to all org members
     broadcast_user_count(state, org_id, join.channel_id);
+
+    // Initiate SRTP key exchange now that the client's MainWindow is live.
+    // Sending on auth is too early — the client isn't ready to receive it yet.
+    let (ke_secret, server_public) = key_exchange::generate_keypair();
+    conn.ke_secret = Some(ke_secret);
+    let _ = tx.send(Envelope::new("key_exchange_init", &KeyExchangeInitPayload {
+        public_key: base64_encode(&server_public),
+    }).to_json());
 
     info!("User '{}' joined channel '{}'", conn.username.as_deref().unwrap_or("?"), channel.name);
 }

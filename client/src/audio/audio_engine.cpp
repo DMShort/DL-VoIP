@@ -31,22 +31,57 @@ void AudioEngine::terminate() {
     }
 }
 
+// Returns the WASAPI host API index, or -1 if not available (non-Windows).
+static PaHostApiIndex wasapiHostApi() {
+    return Pa_HostApiTypeIdToHostApiIndex(paWASAPI);
+}
+
+// Resolves device id -1 to the WASAPI default input/output, falling back to
+// the PortAudio global default if WASAPI isn't available.
+static PaDeviceIndex resolveInputDevice(int deviceId) {
+    if (deviceId >= 0) return deviceId;
+    PaHostApiIndex wasapi = wasapiHostApi();
+    if (wasapi >= 0) {
+        const PaHostApiInfo* info = Pa_GetHostApiInfo(wasapi);
+        if (info && info->defaultInputDevice != paNoDevice)
+            return info->defaultInputDevice;
+    }
+    return Pa_GetDefaultInputDevice();
+}
+
+static PaDeviceIndex resolveOutputDevice(int deviceId) {
+    if (deviceId >= 0) return deviceId;
+    PaHostApiIndex wasapi = wasapiHostApi();
+    if (wasapi >= 0) {
+        const PaHostApiInfo* info = Pa_GetHostApiInfo(wasapi);
+        if (info && info->defaultOutputDevice != paNoDevice)
+            return info->defaultOutputDevice;
+    }
+    return Pa_GetDefaultOutputDevice();
+}
+
 std::vector<AudioDeviceInfo> AudioEngine::inputDevices() const {
     std::vector<AudioDeviceInfo> result;
     if (!m_initialized) return result;
 
+    PaHostApiIndex wasapi = wasapiHostApi();
+
     int count = Pa_GetDeviceCount();
     for (int i = 0; i < count; ++i) {
         const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
-        if (info && info->maxInputChannels > 0) {
-            AudioDeviceInfo dev;
-            dev.id = i;
-            dev.name = info->name;
-            dev.maxInputChannels = info->maxInputChannels;
-            dev.maxOutputChannels = info->maxOutputChannels;
-            dev.defaultSampleRate = info->defaultSampleRate;
-            result.push_back(dev);
-        }
+        if (!info || info->maxInputChannels <= 0) continue;
+        // On Windows, show only WASAPI devices to avoid duplicate entries
+        // (each physical device otherwise appears once per host API).
+        // On other platforms wasapi == -1, so the filter is skipped.
+        if (wasapi >= 0 && info->hostApi != wasapi) continue;
+
+        AudioDeviceInfo dev;
+        dev.id = i;
+        dev.name = info->name;
+        dev.maxInputChannels = info->maxInputChannels;
+        dev.maxOutputChannels = info->maxOutputChannels;
+        dev.defaultSampleRate = info->defaultSampleRate;
+        result.push_back(dev);
     }
     return result;
 }
@@ -55,18 +90,21 @@ std::vector<AudioDeviceInfo> AudioEngine::outputDevices() const {
     std::vector<AudioDeviceInfo> result;
     if (!m_initialized) return result;
 
+    PaHostApiIndex wasapi = wasapiHostApi();
+
     int count = Pa_GetDeviceCount();
     for (int i = 0; i < count; ++i) {
         const PaDeviceInfo* info = Pa_GetDeviceInfo(i);
-        if (info && info->maxOutputChannels > 0) {
-            AudioDeviceInfo dev;
-            dev.id = i;
-            dev.name = info->name;
-            dev.maxInputChannels = info->maxInputChannels;
-            dev.maxOutputChannels = info->maxOutputChannels;
-            dev.defaultSampleRate = info->defaultSampleRate;
-            result.push_back(dev);
-        }
+        if (!info || info->maxOutputChannels <= 0) continue;
+        if (wasapi >= 0 && info->hostApi != wasapi) continue;
+
+        AudioDeviceInfo dev;
+        dev.id = i;
+        dev.name = info->name;
+        dev.maxInputChannels = info->maxInputChannels;
+        dev.maxOutputChannels = info->maxOutputChannels;
+        dev.defaultSampleRate = info->defaultSampleRate;
+        result.push_back(dev);
     }
     return result;
 }
@@ -75,12 +113,12 @@ bool AudioEngine::startCapture(int deviceId) {
     if (!m_initialized || m_captureStream) return false;
 
     PaStreamParameters inputParams;
-    inputParams.device = (deviceId < 0) ? Pa_GetDefaultInputDevice() : deviceId;
+    inputParams.device = resolveInputDevice(deviceId);
     if (inputParams.device == paNoDevice) return false;
 
     inputParams.channelCount = Channels;
     inputParams.sampleFormat = paFloat32;
-    inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
+    inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultHighInputLatency;
     inputParams.hostApiSpecificStreamInfo = nullptr;
 
     m_captureBuffer->reset();
@@ -96,17 +134,22 @@ bool AudioEngine::startCapture(int deviceId) {
         this
     );
     if (err != paNoError) {
+        m_lastError = std::string("Capture open failed (device ") +
+                      std::to_string(inputParams.device) + "): " +
+                      Pa_GetErrorText(err);
         m_captureStream = nullptr;
         return false;
     }
 
     err = Pa_StartStream(m_captureStream);
     if (err != paNoError) {
+        m_lastError = std::string("Capture start failed: ") + Pa_GetErrorText(err);
         Pa_CloseStream(m_captureStream);
         m_captureStream = nullptr;
         return false;
     }
 
+    m_captureDeviceIndex = inputParams.device;
     return true;
 }
 
@@ -122,12 +165,12 @@ bool AudioEngine::startPlayback(int deviceId) {
     if (!m_initialized || m_playbackStream) return false;
 
     PaStreamParameters outputParams;
-    outputParams.device = (deviceId < 0) ? Pa_GetDefaultOutputDevice() : deviceId;
+    outputParams.device = resolveOutputDevice(deviceId);
     if (outputParams.device == paNoDevice) return false;
 
     outputParams.channelCount = Channels;
     outputParams.sampleFormat = paFloat32;
-    outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultLowOutputLatency;
+    outputParams.suggestedLatency = Pa_GetDeviceInfo(outputParams.device)->defaultHighOutputLatency;
     outputParams.hostApiSpecificStreamInfo = nullptr;
 
     m_playbackBuffer->reset();
@@ -143,17 +186,22 @@ bool AudioEngine::startPlayback(int deviceId) {
         this
     );
     if (err != paNoError) {
+        m_lastError = std::string("Playback open failed (device ") +
+                      std::to_string(outputParams.device) + "): " +
+                      Pa_GetErrorText(err);
         m_playbackStream = nullptr;
         return false;
     }
 
     err = Pa_StartStream(m_playbackStream);
     if (err != paNoError) {
+        m_lastError = std::string("Playback start failed: ") + Pa_GetErrorText(err);
         Pa_CloseStream(m_playbackStream);
         m_playbackStream = nullptr;
         return false;
     }
 
+    m_playbackDeviceIndex = outputParams.device;
     return true;
 }
 
@@ -171,6 +219,18 @@ size_t AudioEngine::readCapture(float* buffer, size_t frames) {
 
 size_t AudioEngine::writePlayback(const float* buffer, size_t frames) {
     return m_playbackBuffer->write(buffer, frames);
+}
+
+std::string AudioEngine::captureDeviceName() const {
+    if (m_captureDeviceIndex == paNoDevice) return {};
+    const PaDeviceInfo* info = Pa_GetDeviceInfo(m_captureDeviceIndex);
+    return info ? info->name : "unknown";
+}
+
+std::string AudioEngine::playbackDeviceName() const {
+    if (m_playbackDeviceIndex == paNoDevice) return {};
+    const PaDeviceInfo* info = Pa_GetDeviceInfo(m_playbackDeviceIndex);
+    return info ? info->name : "unknown";
 }
 
 // --- Audio callbacks (real-time safe — no alloc, no mutex, no IO) ---
