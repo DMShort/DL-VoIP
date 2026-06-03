@@ -43,6 +43,9 @@ struct ConnState {
     jti: Option<Uuid>,
     /// Server's ephemeral secret for key exchange (consumed on use).
     ke_secret: Option<x25519_dalek::EphemeralSecret>,
+    /// True once the initial SRTP key exchange has completed for this connection.
+    /// Subsequent channel joins do not re-key; only the periodic rotation task does.
+    srtp_initialized: bool,
     /// WebSocket message rate limiter — tokens refill at 30/sec.
     ws_tokens: f64,
     ws_last_refill: Instant,
@@ -83,6 +86,7 @@ async fn handle_connection(socket: WebSocket, state: AppState, remote_ip: String
         authenticated: false,
         jti: None,
         ke_secret: None,
+        srtp_initialized: false,
         ws_tokens: WS_RATE_LIMIT,
         ws_last_refill: Instant::now(),
     };
@@ -484,13 +488,15 @@ async fn handle_join_channel(
     // Broadcast updated user count to all org members
     broadcast_user_count(state, org_id, join.channel_id);
 
-    // Initiate SRTP key exchange now that the client's MainWindow is live.
-    // Sending on auth is too early — the client isn't ready to receive it yet.
-    let (ke_secret, server_public) = key_exchange::generate_keypair();
-    conn.ke_secret = Some(ke_secret);
-    let _ = tx.send(Envelope::new("key_exchange_init", &KeyExchangeInitPayload {
-        public_key: base64_encode(&server_public),
-    }).to_json());
+    // Initiate SRTP key exchange on the first channel join per connection.
+    // Subsequent joins skip this — only the periodic rotation task re-keys.
+    if !conn.srtp_initialized {
+        let (ke_secret, server_public) = key_exchange::generate_keypair();
+        conn.ke_secret = Some(ke_secret);
+        let _ = tx.send(Envelope::new("key_exchange_init", &KeyExchangeInitPayload {
+            public_key: base64_encode(&server_public),
+        }).to_json());
+    }
 
     info!("User '{}' joined channel '{}'", conn.username.as_deref().unwrap_or("?"), channel.name);
 }
@@ -678,6 +684,7 @@ async fn handle_key_exchange_response(
     let srtp_session = SrtpSession::new(&derived_keys);
     state.srtp_manager.set_session(user_id, srtp_session);
 
+    conn.srtp_initialized = true;
     info!("SRTP key exchange complete for user {}", user_id);
 
     // Send key_exchange_complete
