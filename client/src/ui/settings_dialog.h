@@ -15,10 +15,9 @@
 class AudioEngine;
 class PttManager;
 class ChannelTree;
-
 class VoiceSession;
 
-/// Settings dialog with tabs for Audio, Voice, Hotkeys, Channel Audio, and Network.
+/// Settings dialog with tabs for Audio, Voice, Hotkeys, Channel Audio, Network, and Voice Filters.
 class SettingsDialog : public QDialog {
     Q_OBJECT
 
@@ -30,10 +29,7 @@ public:
                    QWidget* parent = nullptr);
 
 signals:
-    /// Emitted when audio settings change (device, volume).
     void audioSettingsChanged();
-
-    /// Emitted when voice settings change (bitrate, FEC, DTX).
     void voiceSettingsChanged();
 
 private slots:
@@ -47,6 +43,7 @@ private:
     QWidget* createHotkeyTab();
     QWidget* createChannelAudioTab();
     QWidget* createNetworkTab();
+    QWidget* createVoiceFiltersTab();
     void loadFromConfig();
     void saveToConfig();
     void loadHotkeyTable();
@@ -64,30 +61,33 @@ private:
     // Audio tab
     QComboBox* m_inputDevice;
     QComboBox* m_outputDevice;
-    QSlider* m_inputVolume;
-    QSlider* m_outputVolume;
-    QLabel* m_inputVolLabel;
-    QLabel* m_outputVolLabel;
-    QSlider* m_noiseGate;
-    QLabel* m_noiseGateLabel;
+    QSlider*   m_inputVolume;
+    QSlider*   m_outputVolume;
+    QLabel*    m_inputVolLabel;
+    QLabel*    m_outputVolLabel;
+    QSlider*   m_noiseGate;
+    QLabel*    m_noiseGateLabel;
 
     // Voice tab
-    QSpinBox* m_bitrate;
-    QSpinBox* m_complexity;
+    QSpinBox*  m_bitrate;
+    QSpinBox*  m_complexity;
     QCheckBox* m_enableFec;
     QCheckBox* m_enableDtx;
 
     // Hotkey tab
     QTableWidget* m_hotkeyTable = nullptr;
-    QComboBox* m_hotkeyChannelCombo = nullptr;
-    QComboBox* m_hotkeyKeyCombo = nullptr;
+    QComboBox*    m_hotkeyChannelCombo = nullptr;
+    QComboBox*    m_hotkeyKeyCombo = nullptr;
 
     // Channel Audio tab
     QTableWidget* m_channelAudioTable = nullptr;
-    QCheckBox* m_duckingEnabled = nullptr;
-    QSlider* m_duckLevel = nullptr;
-    QLabel* m_duckLevelLabel = nullptr;
+    QCheckBox*    m_duckingEnabled = nullptr;
+    QSlider*      m_duckLevel = nullptr;
+    QLabel*       m_duckLevelLabel = nullptr;
 
     // Network tab
     QCheckBox* m_useTls;
+
+    // Voice Filters tab
+    QCheckBox* m_atcRadioEnabled = nullptr;
 };
