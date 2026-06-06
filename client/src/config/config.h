@@ -10,7 +10,7 @@ struct ServerConfig {
     int voicePort = 9001;
     QString orgTag;
     bool useTls = true;
-    QMap<QString, QString> tlsPinnedCerts;
+    QMap<QString, QString> tlsPinnedCerts; // hostname -> fingerprint
 };
 
 struct UserConfig {
@@ -21,18 +21,22 @@ struct UserConfig {
 };
 
 struct ChannelAudioConfig {
-    float volume = 1.0f;
-    int priority = 5;
+    float volume = 1.0f;   // 0.0 - 1.0
+    int priority = 5;     // 1 = highest, 10 = lowest
     bool muted = false;
-    bool openMic = false;
+    bool openMic = false;  // always transmit in this channel (no PTT required)
 };
 
 struct VoiceSettings {
     bool hotMicEnabled = false;
     int hotMicChannelId = -1;
     bool duckingEnabled = true;
-    float duckLevel = 0.3f;
-    bool atcRadioEnabled = false; // ATC/pilot radio voice filter
+    float duckLevel = 0.3f; // 30% volume when ducked
+    bool atcRadioEnabled  = false; // ATC/pilot radio voice filter
+    int  atcBandwidth     = 50;   // 0-100 slider (bandwidth restriction)
+    int  atcCompression   = 50;   // 0-100 slider (compression squash)
+    int  atcGrit          = 50;   // 0-100 slider (analog grit / drive)
+    int  atcSquelch       = 50;   // 0-100 slider (squelch threshold)
 };
 
 struct AudioConfig {
@@ -73,8 +77,8 @@ public:
     VoiceSettings voice;
     AudioConfig audio;
     OpusConfig opus;
-    QMap<QString, int> hotkeys;
-    QMap<int, ChannelAudioConfig> channelAudio;
+    QMap<QString, int> hotkeys; // key name -> channel_id
+    QMap<int, ChannelAudioConfig> channelAudio; // channelId -> audio settings
     UiConfig ui;
 
 private:

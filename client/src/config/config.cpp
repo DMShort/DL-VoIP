@@ -10,49 +10,70 @@
 AppConfig::AppConfig() {}
 
 QString AppConfig::configFilePath() const {
-    if (!m_configPath.isEmpty()) return m_configPath;
+    if (!m_configPath.isEmpty()) {
+        return m_configPath;
+    }
     return QCoreApplication::applicationDirPath() + "/config.json";
 }
 
 bool AppConfig::load(const QString& path) {
     m_configPath = path.isEmpty() ? configFilePath() : path;
+
     QFile file(m_configPath);
-    if (!file.open(QIODevice::ReadOnly)) return true;
+    if (!file.open(QIODevice::ReadOnly)) {
+        // No config file yet -- use defaults
+        return true;
+    }
+
     QByteArray data = file.readAll();
     file.close();
+
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
-    if (parseError.error != QJsonParseError::NoError) return false;
+    if (parseError.error != QJsonParseError::NoError) {
+        return false;
+    }
+
     QJsonObject root = doc.object();
-    if (root.contains("server"))        serverFromJson(root["server"].toObject());
-    if (root.contains("user"))          userFromJson(root["user"].toObject());
-    if (root.contains("voice"))         voiceFromJson(root["voice"].toObject());
-    if (root.contains("audio"))         audioFromJson(root["audio"].toObject());
-    if (root.contains("opus"))          opusFromJson(root["opus"].toObject());
+
+    if (root.contains("server"))  serverFromJson(root["server"].toObject());
+    if (root.contains("user"))    userFromJson(root["user"].toObject());
+    if (root.contains("voice"))   voiceFromJson(root["voice"].toObject());
+    if (root.contains("audio"))   audioFromJson(root["audio"].toObject());
+    if (root.contains("opus"))    opusFromJson(root["opus"].toObject());
     if (root.contains("hotkeys"))       hotkeysFromJson(root["hotkeys"].toObject());
     if (root.contains("channel_audio")) channelAudioFromJson(root["channel_audio"].toObject());
     if (root.contains("ui"))            uiFromJson(root["ui"].toObject());
+
     return true;
 }
 
 bool AppConfig::save(const QString& path) const {
     QString savePath = path.isEmpty() ? configFilePath() : path;
+
     QJsonObject root;
-    root["server"]        = serverToJson();
-    root["user"]          = userToJson();
-    root["voice"]         = voiceToJson();
-    root["audio"]         = audioToJson();
-    root["opus"]          = opusToJson();
+    root["server"]  = serverToJson();
+    root["user"]    = userToJson();
+    root["voice"]   = voiceToJson();
+    root["audio"]   = audioToJson();
+    root["opus"]    = opusToJson();
     root["hotkeys"]       = hotkeysToJson();
     root["channel_audio"] = channelAudioToJson();
     root["ui"]            = uiToJson();
+
     QJsonDocument doc(root);
+
     QFile file(savePath);
-    if (!file.open(QIODevice::WriteOnly)) return false;
+    if (!file.open(QIODevice::WriteOnly)) {
+        return false;
+    }
+
     file.write(doc.toJson(QJsonDocument::Indented));
     file.close();
     return true;
 }
+
+// --- Serialization ---
 
 QJsonObject AppConfig::serverToJson() const {
     QJsonObject obj;
@@ -62,8 +83,9 @@ QJsonObject AppConfig::serverToJson() const {
     obj["org_tag"]    = server.orgTag;
     obj["use_tls"]    = server.useTls;
     QJsonObject certs;
-    for (auto it = server.tlsPinnedCerts.constBegin(); it != server.tlsPinnedCerts.constEnd(); ++it)
+    for (auto it = server.tlsPinnedCerts.constBegin(); it != server.tlsPinnedCerts.constEnd(); ++it) {
         certs[it.key()] = it.value();
+    }
     obj["tls_pinned_certs"] = certs;
     return obj;
 }
@@ -84,16 +106,20 @@ QJsonObject AppConfig::voiceToJson() const {
     obj["ducking_enabled"]    = voice.duckingEnabled;
     obj["duck_level"]         = static_cast<double>(voice.duckLevel);
     obj["atc_radio_enabled"]  = voice.atcRadioEnabled;
+    obj["atc_bandwidth"]      = voice.atcBandwidth;
+    obj["atc_compression"]    = voice.atcCompression;
+    obj["atc_grit"]           = voice.atcGrit;
+    obj["atc_squelch"]        = voice.atcSquelch;
     return obj;
 }
 
 QJsonObject AppConfig::audioToJson() const {
     QJsonObject obj;
-    obj["input_device_id"]      = audio.inputDeviceId;
-    obj["output_device_id"]     = audio.outputDeviceId;
-    obj["input_volume"]         = static_cast<double>(audio.inputVolume);
-    obj["output_volume"]        = static_cast<double>(audio.outputVolume);
-    obj["noise_gate_threshold"] = static_cast<double>(audio.noiseGateThreshold);
+    obj["input_device_id"]       = audio.inputDeviceId;
+    obj["output_device_id"]      = audio.outputDeviceId;
+    obj["input_volume"]          = static_cast<double>(audio.inputVolume);
+    obj["output_volume"]         = static_cast<double>(audio.outputVolume);
+    obj["noise_gate_threshold"]  = static_cast<double>(audio.noiseGateThreshold);
     return obj;
 }
 
@@ -108,8 +134,9 @@ QJsonObject AppConfig::opusToJson() const {
 
 QJsonObject AppConfig::hotkeysToJson() const {
     QJsonObject obj;
-    for (auto it = hotkeys.constBegin(); it != hotkeys.constEnd(); ++it)
+    for (auto it = hotkeys.constBegin(); it != hotkeys.constEnd(); ++it) {
         obj[it.key()] = it.value();
+    }
     return obj;
 }
 
@@ -117,10 +144,10 @@ QJsonObject AppConfig::channelAudioToJson() const {
     QJsonObject obj;
     for (auto it = channelAudio.constBegin(); it != channelAudio.constEnd(); ++it) {
         QJsonObject ch;
-        ch["volume"]   = static_cast<double>(it.value().volume);
-        ch["priority"] = it.value().priority;
-        ch["muted"]    = it.value().muted;
-        ch["open_mic"] = it.value().openMic;
+        ch["volume"]    = static_cast<double>(it.value().volume);
+        ch["priority"]  = it.value().priority;
+        ch["muted"]     = it.value().muted;
+        ch["open_mic"]  = it.value().openMic;
         obj[QString::number(it.key())] = ch;
     }
     return obj;
@@ -128,14 +155,16 @@ QJsonObject AppConfig::channelAudioToJson() const {
 
 QJsonObject AppConfig::uiToJson() const {
     QJsonObject obj;
-    obj["theme"]             = ui.theme;
-    obj["window_x"]          = ui.windowX;
-    obj["window_y"]          = ui.windowY;
-    obj["window_width"]      = ui.windowWidth;
-    obj["window_height"]     = ui.windowHeight;
+    obj["theme"]            = ui.theme;
+    obj["window_x"]         = ui.windowX;
+    obj["window_y"]         = ui.windowY;
+    obj["window_width"]     = ui.windowWidth;
+    obj["window_height"]    = ui.windowHeight;
     obj["show_activity_log"] = ui.showActivityLog;
     return obj;
 }
+
+// --- Deserialization ---
 
 void AppConfig::serverFromJson(const QJsonObject& obj) {
     if (obj.contains("address"))    server.address   = obj["address"].toString();
@@ -145,14 +174,15 @@ void AppConfig::serverFromJson(const QJsonObject& obj) {
     if (obj.contains("use_tls"))    server.useTls    = obj["use_tls"].toBool(true);
     if (obj.contains("tls_pinned_certs")) {
         QJsonObject certs = obj["tls_pinned_certs"].toObject();
-        for (auto it = certs.constBegin(); it != certs.constEnd(); ++it)
+        for (auto it = certs.constBegin(); it != certs.constEnd(); ++it) {
             server.tlsPinnedCerts[it.key()] = it.value().toString();
+        }
     }
 }
 
 void AppConfig::userFromJson(const QJsonObject& obj) {
-    if (obj.contains("username"))    user.username   = obj["username"].toString();
-    if (obj.contains("remember_me")) user.rememberMe = obj["remember_me"].toBool(false);
+    if (obj.contains("username"))        user.username      = obj["username"].toString();
+    if (obj.contains("remember_me"))     user.rememberMe    = obj["remember_me"].toBool(false);
     if (obj.contains("saved_token") && !obj["saved_token"].isNull())
         user.savedToken = obj["saved_token"].toString();
     if (obj.contains("last_channel_id") && !obj["last_channel_id"].isNull())
@@ -160,12 +190,16 @@ void AppConfig::userFromJson(const QJsonObject& obj) {
 }
 
 void AppConfig::voiceFromJson(const QJsonObject& obj) {
-    if (obj.contains("hot_mic_enabled"))    voice.hotMicEnabled  = obj["hot_mic_enabled"].toBool(false);
+    if (obj.contains("hot_mic_enabled"))    voice.hotMicEnabled   = obj["hot_mic_enabled"].toBool(false);
     if (obj.contains("hot_mic_channel_id") && !obj["hot_mic_channel_id"].isNull())
         voice.hotMicChannelId = obj["hot_mic_channel_id"].toInt(-1);
-    if (obj.contains("ducking_enabled"))   voice.duckingEnabled  = obj["ducking_enabled"].toBool(true);
-    if (obj.contains("duck_level"))        voice.duckLevel       = static_cast<float>(obj["duck_level"].toDouble(0.3));
+    if (obj.contains("ducking_enabled"))    voice.duckingEnabled  = obj["ducking_enabled"].toBool(true);
+    if (obj.contains("duck_level"))         voice.duckLevel       = static_cast<float>(obj["duck_level"].toDouble(0.3));
     if (obj.contains("atc_radio_enabled")) voice.atcRadioEnabled = obj["atc_radio_enabled"].toBool(false);
+    if (obj.contains("atc_bandwidth"))    voice.atcBandwidth    = obj["atc_bandwidth"].toInt(50);
+    if (obj.contains("atc_compression"))  voice.atcCompression  = obj["atc_compression"].toInt(50);
+    if (obj.contains("atc_grit"))         voice.atcGrit         = obj["atc_grit"].toInt(50);
+    if (obj.contains("atc_squelch"))      voice.atcSquelch      = obj["atc_squelch"].toInt(50);
 }
 
 void AppConfig::audioFromJson(const QJsonObject& obj) {
@@ -185,8 +219,9 @@ void AppConfig::opusFromJson(const QJsonObject& obj) {
 
 void AppConfig::hotkeysFromJson(const QJsonObject& obj) {
     hotkeys.clear();
-    for (auto it = obj.constBegin(); it != obj.constEnd(); ++it)
+    for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
         hotkeys[it.key()] = it.value().toInt();
+    }
 }
 
 void AppConfig::channelAudioFromJson(const QJsonObject& obj) {
@@ -204,10 +239,10 @@ void AppConfig::channelAudioFromJson(const QJsonObject& obj) {
 }
 
 void AppConfig::uiFromJson(const QJsonObject& obj) {
-    if (obj.contains("theme"))             ui.theme           = obj["theme"].toString("dark");
-    if (obj.contains("window_x"))          ui.windowX         = obj["window_x"].toInt(100);
-    if (obj.contains("window_y"))          ui.windowY         = obj["window_y"].toInt(100);
-    if (obj.contains("window_width"))      ui.windowWidth     = obj["window_width"].toInt(900);
-    if (obj.contains("window_height"))     ui.windowHeight    = obj["window_height"].toInt(600);
+    if (obj.contains("theme"))            ui.theme          = obj["theme"].toString("dark");
+    if (obj.contains("window_x"))         ui.windowX        = obj["window_x"].toInt(100);
+    if (obj.contains("window_y"))         ui.windowY        = obj["window_y"].toInt(100);
+    if (obj.contains("window_width"))     ui.windowWidth    = obj["window_width"].toInt(900);
+    if (obj.contains("window_height"))    ui.windowHeight   = obj["window_height"].toInt(600);
     if (obj.contains("show_activity_log")) ui.showActivityLog = obj["show_activity_log"].toBool(true);
 }
