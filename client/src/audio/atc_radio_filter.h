@@ -74,8 +74,8 @@ public:
         // Apply defaults (all sliders at 50)
         applyBandwidthParams(300.0, 3000.0);
         applyCompressionParams(15.0f, dbToLinear(-40.0f), dbToLinear(12.0f));
-        m_drive.store(4.0,   std::memory_order_relaxed);
-        m_gateThreshold.store(dbToLinear(-40.0f), std::memory_order_relaxed);
+        m_drive.store(0.4,   std::memory_order_relaxed);          // slider 50 default
+        m_gateThreshold.store(dbToLinear(-48.0f), std::memory_order_relaxed); // slider 50 default
     }
 
     // ---- Parameter setters (call from main/UI thread) ----
@@ -97,15 +97,15 @@ public:
         applyCompressionParams(ratio, dbToLinear(threshDb), dbToLinear(makeupDb));
     }
 
-    // Analog Grit:  0 = clean, 50 = mild overdrive, 100 = heavy fuzz
+    // Analog Grit:  0 = clean, 50 = subtle warmth, 100 = mild crunch (never heavy distortion)
     void setAnalogGrit(int t) {
-        double drive = piecewiseLinear(0.0, 4.0, 20.0, t);
+        double drive = piecewiseLinear(0.0, 0.4, 2.0, t);
         m_drive.store(drive, std::memory_order_relaxed);
     }
 
-    // Squelch Threshold:  0 = very open (-60 dB), 50 = standard (-40 dB), 100 = aggressive (-20 dB)
+    // Squelch Threshold:  0 = gate open (-60 dB), 50 = gentle hiss gate (-48 dB), 100 = speech-preserving gate (-38 dB)
     void setSquelchThreshold(int t) {
-        float gateDb = static_cast<float>(piecewiseLinear(-60.0, -40.0, -20.0, t));
+        float gateDb = static_cast<float>(piecewiseLinear(-60.0, -48.0, -38.0, t));
         m_gateThreshold.store(dbToLinear(gateDb), std::memory_order_relaxed);
     }
 
@@ -243,6 +243,6 @@ private:
     std::atomic<float>  m_threshold {0.01f};   // linear amplitude (~-40 dBFS)
     std::atomic<float>  m_ratio     {15.0f};
     std::atomic<float>  m_makeupGain{4.0f};    // +12 dB
-    std::atomic<double> m_drive     {4.0};
-    std::atomic<float>  m_gateThreshold{0.01f}; // ~-40 dBFS
+    std::atomic<double> m_drive     {0.4};
+    std::atomic<float>  m_gateThreshold{0.004f}; // ~-48 dBFS
 };

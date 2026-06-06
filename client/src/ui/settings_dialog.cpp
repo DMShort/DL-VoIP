@@ -393,9 +393,8 @@ QWidget* SettingsDialog::createVoiceFiltersTab() {
     auto* layout = new QVBoxLayout(widget);
 
     auto* info = new QLabel(
-        "Voice filters modify audio in real-time to simulate radio or communication "
-        "environments. All settings apply to both your outgoing microphone and "
-        "incoming voices from other users.", this);
+        "Voice filters are applied to incoming audio only. "
+        "Your microphone is always transmitted clean and unfiltered.", this);
     info->setWordWrap(true);
     info->setStyleSheet("padding: 4px; color: #ccc;");
     layout->addWidget(info);
@@ -406,8 +405,10 @@ QWidget* SettingsDialog::createVoiceFiltersTab() {
 
     m_atcRadioEnabled = new QCheckBox("Enable ATC/Pilot Radio Filter", this);
     m_atcRadioEnabled->setToolTip(
-        "Simulates a VHF AM aviation radio: bandpass filter, compressor, "
-        "soft-clipper, and squelch gate. Use the sliders below to tune each stage.");
+        "Simulates a VHF AM aviation radio on incoming audio only. "
+        "Your microphone is always transmitted clean and unfiltered. "
+        "Applies bandpass EQ, compressor, subtle soft-clipper, and squelch gate "
+        "to voices you hear from the network.");
     atcLayout->addWidget(m_atcRadioEnabled);
 
     // ---- Parameter sliders (only active when filter is enabled) ----
@@ -450,13 +451,13 @@ QWidget* SettingsDialog::createVoiceFiltersTab() {
         m_atcCompression);
 
     makeRow("Analog Grit:",
-        "Controls distortion / AM over-modulation crunch.\n"
-        "0 = clean passthrough  |  50 = mild soft-clip  |  100 = heavy fuzz",
+        "Adds subtle harmonic warmth/crunch. Effect is intentionally gentle.\n"
+        "0 = clean passthrough  |  50 = subtle warmth  |  100 = mild crunch",
         m_atcGrit);
 
     makeRow("Squelch Threshold:",
-        "Controls noise gate aggressiveness.\n"
-        "0 = very open (-60 dB)  |  50 = standard (-40 dB)  |  100 = aggressive (-20 dB)",
+        "Controls noise gate aggressiveness. Preserves normal speech volumes.\n"
+        "0 = gate open (-60 dB)  |  50 = gentle hiss gate (-48 dB)  |  100 = max gate (-38 dB)",
         m_atcSquelch);
 
     atcLayout->addWidget(m_atcParamWidget);

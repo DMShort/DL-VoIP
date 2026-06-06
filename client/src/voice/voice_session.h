@@ -77,22 +77,21 @@ public:
     void setDuckingEnabled(bool enabled) { m_duckingEnabled.store(enabled, std::memory_order_relaxed); }
     void setDuckLevel(float level) { m_duckLevel.store(level, std::memory_order_relaxed); }
 
-    /// Enable/disable the ATC/pilot radio voice filter on TX and RX audio.
+    /// Enable/disable the ATC/pilot radio voice filter on incoming (RX) audio only.
     void setAtcRadioEnabled(bool enabled) {
         bool prev = m_atcRadioEnabled.exchange(enabled, std::memory_order_relaxed);
         if (!prev && enabled) {
             // Reset filter state so stale history doesn't pollute the new signal.
-            m_txAtcFilter.resetState();
             m_rxAtcFilter.resetState();
         }
     }
     bool atcRadioEnabled() const { return m_atcRadioEnabled.load(std::memory_order_relaxed); }
 
     /// Update individual ATC filter parameters (0-100). Safe to call while running.
-    void setAtcBandwidth(int v)   { m_txAtcFilter.setBandwidthRestriction(v); m_rxAtcFilter.setBandwidthRestriction(v); }
-    void setAtcCompression(int v) { m_txAtcFilter.setCompressionSquash(v);    m_rxAtcFilter.setCompressionSquash(v); }
-    void setAtcGrit(int v)        { m_txAtcFilter.setAnalogGrit(v);           m_rxAtcFilter.setAnalogGrit(v); }
-    void setAtcSquelch(int v)     { m_txAtcFilter.setSquelchThreshold(v);     m_rxAtcFilter.setSquelchThreshold(v); }
+    void setAtcBandwidth(int v)   { m_rxAtcFilter.setBandwidthRestriction(v); }
+    void setAtcCompression(int v) { m_rxAtcFilter.setCompressionSquash(v); }
+    void setAtcGrit(int v)        { m_rxAtcFilter.setAnalogGrit(v); }
+    void setAtcSquelch(int v)     { m_rxAtcFilter.setSquelchThreshold(v); }
 
     /// Audio levels for VU meters.
     float inputLevel() const;
@@ -158,9 +157,8 @@ private:
     std::atomic<bool> m_duckingEnabled{true};
     std::atomic<float> m_duckLevel{0.3f};
 
-    // ATC radio filter
+    // ATC radio filter (RX only -- outgoing mic is always sent clean)
     std::atomic<bool> m_atcRadioEnabled{false};
-    AtcRadioFilter m_txAtcFilter; // applied to outgoing PCM before Opus encode
     AtcRadioFilter m_rxAtcFilter; // applied to mixed incoming PCM before playback
 
     // Playback mixing timer
